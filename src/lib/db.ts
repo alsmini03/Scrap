@@ -9,6 +9,7 @@ import { gfmHeadingId } from "marked-gfm-heading-id";
 import { query } from './pg';
 import { randomUUID } from "node:crypto";
 import { extractYoutube, extractReport, extractBlogSummary } from './extract-service';
+import { fetchNaverReportContent } from './naver-report';
 
 // Configure marked
 marked.use(gfmHeadingId());
@@ -90,19 +91,27 @@ export async function getReports(prefetchedUser?: any, includeContent: boolean =
   try {
     const user = await getSessionUser(prefetchedUser);
     const columns = includeContent
-      ? "id, title, author, institution, date, url, summary, content, user_id, added_at, is_liked, gemini_model, item_name, item_code"
-      : "id, title, author, institution, date, url, summary, user_id, added_at, is_liked, gemini_model, item_name, item_code";
+      ? "id, title, author, institution, date, url, summary, content, user_id, added_at, is_liked, gemini_model, item_name, item_code, research_id, category"
+      : "id, title, author, institution, date, url, summary, user_id, added_at, is_liked, gemini_model, item_name, item_code, research_id, category";
     const res = await query(
       `SELECT ${columns} FROM reports WHERE user_id = $1 OR user_id = $2 ORDER BY added_at DESC`,
       [user.id, user.email]
     );
     return res.rows;
   } catch (error: any) {
-    if (error.message.includes('column "gemini_model" does not exist') || error.message.includes('column "item_name" does not exist') || error.message.includes('column "item_code" does not exist')) {
+    if (
+      error.message.includes('column "gemini_model" does not exist') ||
+      error.message.includes('column "item_name" does not exist') ||
+      error.message.includes('column "item_code" does not exist') ||
+      error.message.includes('column "research_id" does not exist') ||
+      error.message.includes('column "category" does not exist')
+    ) {
         try {
             await query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS gemini_model TEXT");
             await query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS item_name TEXT");
             await query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS item_code TEXT");
+            await query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS research_id TEXT");
+            await query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS category TEXT");
             return getReports(prefetchedUser, includeContent);
         } catch (mErr) {
             console.error('Migration failed:', mErr);
@@ -123,26 +132,60 @@ export async function saveReport(report: {
   summary?: string;
   itemName?: string;
   itemCode?: string;
+  researchId?: string;
+  category?: string;
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
     const user = await ensureApproved();
     const id = randomUUID();
     const addedAt = new Date().toISOString();
 
+    let finalContent = report.content || '';
+    if (!finalContent && report.researchId) {
+      try {
+        finalContent = await fetchNaverReportContent(report.researchId, report.category || 'company');
+      } catch (e) {
+        console.warn('Failed to fetch naver content during saveReport:', e);
+      }
+    }
+
     await query(
-      "INSERT INTO reports (id, title, author, institution, date, url, content, summary, user_id, added_at, item_name, item_code) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
-      [id, report.title, report.author, report.institution, report.date, report.url, report.content, report.summary, user.email || user.id, addedAt, report.itemName || null, report.itemCode || null]
+      "INSERT INTO reports (id, title, author, institution, date, url, content, summary, user_id, added_at, item_name, item_code, research_id, category) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
+      [
+        id,
+        report.title,
+        report.author,
+        report.institution,
+        report.date,
+        report.url,
+        finalContent,
+        report.summary,
+        user.email || user.id,
+        addedAt,
+        report.itemName || null,
+        report.itemCode || null,
+        report.researchId || null,
+        report.category || null
+      ]
     );
 
     safeRevalidate('/report');
     safeRevalidate('/saved');
     return { success: true, id };
   } catch (error: any) {
-    if (error.message.includes('column "item_name" does not exist') || error.message.includes('column "item_code" does not exist') || error.message.includes('column "gemini_model" does not exist')) {
+    if (
+      error.message.includes('column "item_name" does not exist') ||
+      error.message.includes('column "item_code" does not exist') ||
+      error.message.includes('column "gemini_model" does not exist') ||
+      error.message.includes('column "research_id" does not exist') ||
+      error.message.includes('column "category" does not exist')
+    ) {
         try {
             await query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS item_name TEXT");
             await query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS item_code TEXT");
             await query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS gemini_model TEXT");
+            await query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS research_id TEXT");
+            await query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS category TEXT");
             return saveReport(report);
         } catch (mErr) {
             console.error('Migration failed:', mErr);
@@ -154,6 +197,18 @@ export async function saveReport(report: {
         report: { ...report, content: report.content ? 'OMITTED' : undefined }
     });
     return { success: false, error: error.message || '리포트 정보를 저장하는 중 오류가 발생했습니다.' };
+  }
+}
+
+export async function updateReportContentAction(id: string, content: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    await ensureApproved();
+    await query("UPDATE reports SET content = $1 WHERE id = $2", [content, id]);
+    safeRevalidate('/report');
+    safeRevalidate('/saved');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
   }
 }
 

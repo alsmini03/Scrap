@@ -8,6 +8,7 @@ async function callGeminiInteractionsAPI(apiKey: string, model: string, inputs: 
   const payload = {
     model: model,
     input: inputs,
+    store: true,
   };
 
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/interactions?key=${apiKey}`, {

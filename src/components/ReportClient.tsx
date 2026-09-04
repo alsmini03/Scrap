@@ -3,7 +3,7 @@
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { useEffect, useState, memo, useRef, useMemo } from 'react';
-import { addReportTab, deleteReportTab, updateReportTabOrder, saveReport, getGeminiModels, getGeminiPrompts, getResolvedReportUrlAction, getAdjacentReportIdsAction, toggleLikeAction, addToQueue, getQueueItems, retryGeminiTaskAction, deleteReport, sendBatchEmailAction } from '@/lib/db';
+import { addReportTab, deleteReportTab, updateReportTabOrder, saveReport, getGeminiModels, getGeminiPrompts, getResolvedReportUrlAction, getAdjacentReportIdsAction, toggleLikeAction, addToQueue, getQueueItems, retryGeminiTaskAction, deleteReport, sendBatchEmailAction, updateReportContentAction } from '@/lib/db';
 import { cn, formatDateToYMD, getLongPressHandlers } from '@/lib/utils';
 import { showToast } from '@/components/Toast';
 import TabManagementModal from '@/components/TabManagementModal';
@@ -35,6 +35,8 @@ interface Report {
   gemini_model?: string;
   url?: string;
   naverUrl?: string;
+  researchId?: string;
+  category?: string;
 }
 
 interface ReportContent {
@@ -229,23 +231,47 @@ export default function ReportClient({
     setIsContentLoading(true);
     setIsDetailLoading(true);
     try {
-      const reportCategory = selectedRecommendReport?.fileNum || selectedSavedReport?.fileNum || 'company';
-      const [res, adj, { items, lastProcessedAt: last }] = await Promise.all([
-        fetch('/api/report/content', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ num: reportId, category: reportCategory })
-        }),
+      const [adj, { items, lastProcessedAt: last }] = await Promise.all([
         getAdjacentReportIdsAction(reportId),
         getQueueItems()
       ]);
-      const html = await res.text();
-      setViewingContent({ id: reportId, content: html });
       setAdjacentIds(adj);
 
       const qItem = items.find(i => i.type === 'report' && i.target_id === reportId);
       setCurrentQueueItem(qItem || null);
       setLastProcessedAt(last);
+
+      if (selectedSavedReport) {
+        if (selectedSavedReport.content && selectedSavedReport.content.trim().length > 0) {
+          setViewingContent({ id: reportId, content: selectedSavedReport.content });
+        } else {
+          const numToFetch = selectedSavedReport.research_id || selectedSavedReport.researchId || reportId;
+          const reportCategory = selectedSavedReport.category || selectedSavedReport.fileNum || 'company';
+
+          const res = await fetch('/api/report/content', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ num: numToFetch, category: reportCategory })
+          });
+          const html = await res.text();
+          setViewingContent({ id: reportId, content: html });
+
+          if (html && !html.startsWith('<p>내용을 불러올 수 없습니다.')) {
+            await updateReportContentAction(selectedSavedReport.id, html);
+          }
+        }
+      } else {
+        const numToFetch = selectedRecommendReport?.researchId || reportId;
+        const reportCategory = selectedRecommendReport?.fileNum || selectedRecommendReport?.category || 'company';
+
+        const res = await fetch('/api/report/content', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ num: numToFetch, category: reportCategory })
+        });
+        const html = await res.text();
+        setViewingContent({ id: reportId, content: html });
+      }
     } catch (err) {
       console.error(err);
       showToast('내용을 불러오는 중 오류가 발생했습니다.', 'error');
@@ -366,7 +392,9 @@ export default function ReportClient({
         summary: '',
         content: viewingContent?.id === report.id ? viewingContent.content : '',
         itemName: report.itemName,
-        itemCode: report.itemCode
+        itemCode: report.itemCode,
+        researchId: report.researchId || report.id,
+        category: report.fileNum || report.category || 'company'
       });
 
       if (result.success && result.id) {
