@@ -545,7 +545,7 @@ export default function BlogClient({
                         title="저장 시 AI 프롬프트 분석 실행 여부"
                     >
                         <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
-                        <span>PROMPT {isPromptOn ? 'ON' : 'OFF'}</span>
+                        <span>{isPromptOn ? 'ON' : 'OFF'}</span>
                     </button>
                     <button
                         onClick={() => setShowTabManager(!showTabManager)}
