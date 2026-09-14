@@ -469,22 +469,22 @@ const SavedItem = memo(({ item, isEditMode, isSelected, hasError, onPointerDown,
   let typeLabel = '';
 
   if (item.type === 'youtube') {
-    href = `/youtube/${item.id}`;
+    href = `/youtube/${item.id}?from=saved`;
     icon = 'video_library';
     iconColor = 'text-red-500 bg-red-50 dark:bg-red-500/10';
     typeLabel = 'YouTube';
   } else if (item.type === 'blog') {
-    href = `/blog/${item.id}`;
+    href = `/blog/${item.id}?from=saved`;
     icon = 'rss_feed';
     iconColor = 'text-green-500 bg-green-50 dark:bg-green-500/10';
     typeLabel = '블로그';
   } else if (item.type === 'report') {
-    href = `/report?id=${item.id}`;
+    href = `/report?id=${item.id}&from=saved`;
     icon = 'description';
     iconColor = 'text-blue-500 bg-blue-50 dark:bg-blue-500/10';
     typeLabel = '리포트';
   } else if (item.type === 'book') {
-    href = `/book/${item.id}`;
+    href = `/book/${item.id}?from=saved`;
     icon = 'menu_book';
     iconColor = 'text-amber-500 bg-amber-50 dark:bg-amber-500/10';
     typeLabel = 'Yes24';

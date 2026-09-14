@@ -3,7 +3,7 @@
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { getBlogById, deleteBlog, sendBlogEmailAction, getAdjacentBlogIdsAction, toggleLikeAction, processBlogSummaryAction } from '@/lib/db';
-import { notFound, useParams, useRouter } from 'next/navigation';
+import { notFound, useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { cn, formatDateToYMD, isThumbnailInContent } from '@/lib/utils';
 import { showToast } from '@/components/Toast';
@@ -42,6 +42,8 @@ const SkeletonBlogDetail = () => (
 export default function BlogDetailPage() {
   const params = useParams();
   const id = params?.id as string;
+  const searchParams = useSearchParams();
+  const fromSaved = searchParams.get('from') === 'saved';
   const router = useRouter();
   const [blog, setBlog] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -304,7 +306,7 @@ export default function BlogDetailPage() {
         />
       </main>
 
-      <BottomNav activeTab="blog" />
+      <BottomNav activeTab={fromSaved ? 'saved' : 'blog'} />
     </div>
   );
 }

@@ -15,7 +15,7 @@ import {
   retryGeminiTaskAction,
   processYoutubeSummaryImmediatelyAction
 } from '@/lib/db';
-import { notFound, useRouter, useParams } from 'next/navigation';
+import { notFound, useRouter, useParams, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -66,13 +66,15 @@ const SkeletonYoutubeDetail = () => (
         <div className="h-64 w-full bg-slate-100 dark:bg-slate-800 rounded-2xl animate-skeleton" />
       </div>
     </main>
-    <BottomNav activeTab="library" />
+    <BottomNav activeTab="youtube" />
   </div>
 );
 
 export default function YoutubeDetailPage() {
   const params = useParams();
   const id = params?.id as string;
+  const searchParams = useSearchParams();
+  const fromSaved = searchParams.get('from') === 'saved';
   const router = useRouter();
   const [video, setVideo] = useState<YoutubeVideo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -689,7 +691,7 @@ export default function YoutubeDetailPage() {
         </section>
       </main>
 
-      <BottomNav activeTab="library" />
+      <BottomNav activeTab={fromSaved ? 'saved' : 'youtube'} />
     </div>
   );
 }

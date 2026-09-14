@@ -3,7 +3,7 @@
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { Book } from '@/types/book';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useEffect, useState, useRef } from 'react';
 import { getBookById, updateBook, softDeleteBook, toggleLikeAction } from '@/lib/db';
@@ -12,6 +12,8 @@ import { showToast } from '@/components/Toast';
 export default function BookDetailPage() {
   const params = useParams();
   const id = params?.id as string;
+  const searchParams = useSearchParams();
+  const fromSaved = searchParams.get('from') === 'saved';
   const router = useRouter();
   const [book, setBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(true);
@@ -299,7 +301,7 @@ export default function BookDetailPage() {
         </section>
       </main>
 
-      <BottomNav activeTab="library" />
+      <BottomNav activeTab={fromSaved ? 'saved' : 'yes24'} />
     </div>
   );
 }

@@ -82,6 +82,7 @@ export default function ReportClient({
   const [page, setPage] = useState(1);
 
   const searchParams = useSearchParams();
+  const fromSaved = searchParams.get('from') === 'saved';
   const router = useRouter();
 
   // Interaction State
@@ -1270,7 +1271,7 @@ export default function ReportClient({
         </div>
       )}
 
-      <BottomNav activeTab="report" />
+      <BottomNav activeTab={fromSaved || selectedReportId ? 'saved' : 'report'} />
 
       <TabManagementModal
         isOpen={isModalOpen}
