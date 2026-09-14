@@ -344,13 +344,81 @@ export async function extractBlogSummary(blogContent: string, apiKey: string, mo
     const geminiModel = modelName || "gemini-1.5-flash";
     const userPrompt = promptText || "이 블로그 내용을 핵심 위주로 요약하고 분석해 주세요.";
 
-    // Clean HTML tags to plain text for prompt processing
     const $ = cheerio.load(blogContent || "");
     const cleanText = $.text().trim() || blogContent;
 
-    const fullPrompt = `${userPrompt}\n\n[블로그 글 내용]\n${cleanText.slice(0, 30000)}`;
+    // Collect images embedded in blog post
+    const imageUrls: string[] = [];
+    $("img").each((_, el) => {
+        const src = $(el).attr("data-src") || $(el).attr("data-lazy-src") || $(el).attr("src") || "";
+        if (
+            src &&
+            src.startsWith("http") &&
+            !src.includes("sticker") &&
+            !src.includes("emoticon") &&
+            !src.includes("profile") &&
+            !src.includes("icon") &&
+            !src.includes("static.naver") &&
+            !src.includes("post-phinf") === false // include post-phinf images
+        ) {
+            imageUrls.push(src);
+        }
+    });
 
+    // Deduplicate and limit to up to 5 main images
+    const uniqueImages = Array.from(new Set(imageUrls)).slice(0, 5);
     const model = genAI.getGenerativeModel({ model: geminiModel });
+
+    let extractedImagesText = "";
+    if (uniqueImages.length > 0) {
+        const imageTexts: string[] = [];
+        for (let i = 0; i < uniqueImages.length; i++) {
+            const imgUrl = uniqueImages[i];
+            try {
+                const imgRes = await fetch(imgUrl, {
+                    headers: {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Referer": "https://m.blog.naver.com/"
+                    },
+                    signal: AbortSignal.timeout(5000)
+                });
+
+                if (imgRes.ok) {
+                    const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+                    const mimeType = contentType.includes("png") ? "image/png" : contentType.includes("webp") ? "image/webp" : "image/jpeg";
+                    const arrayBuffer = await imgRes.arrayBuffer();
+                    const base64Img = Buffer.from(arrayBuffer).toString("base64");
+
+                    const imgResult = await model.generateContent([
+                        "이 이미지에 포함된 모든 텍스트와 핵심 시각적 정보(표, 차트, 본문 내용 등)를 정확하게 추출해 주세요. 텍스트가 없다면 '텍스트 없음'이라고 답해 주세요.",
+                        {
+                            inlineData: {
+                                data: base64Img,
+                                mimeType: mimeType
+                            }
+                        }
+                    ]);
+
+                    const txt = imgResult.response.text().trim();
+                    if (txt && !txt.includes("텍스트 없음")) {
+                        imageTexts.push(`[이미지 #${i + 1} 추출 내용]\n${txt}`);
+                    }
+                }
+            } catch (imgErr) {
+                console.warn(`Failed to process blog image ${imgUrl}:`, imgErr);
+            }
+        }
+
+        if (imageTexts.length > 0) {
+            extractedImagesText = imageTexts.join("\n\n");
+        }
+    }
+
+    let fullPrompt = `${userPrompt}\n\n[블로그 텍스트 내용]\n${cleanText.slice(0, 25000)}`;
+    if (extractedImagesText) {
+        fullPrompt += `\n\n[블로그 첨부 이미지에서 추출된 텍스트 및 정보]\n${extractedImagesText}`;
+    }
+
     const result = await model.generateContent([{ text: fullPrompt }]);
     return result.response.text();
 }
