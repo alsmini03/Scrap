@@ -493,12 +493,12 @@ export default function BlogClient({
       <main className="mt-4 px-4">
         {viewMode === 'recommend' ? (
           <>
-            {/* Blog Source Tabs */}
+            {/* Blog Source Tabs & Controls Header */}
             <div className={cn(
-                "flex items-center gap-2 mb-6 -mx-4 px-4 sticky top-[64px] bg-background-light dark:bg-background-dark z-20"
+                "flex items-center gap-2 mb-4 -mx-4 px-4 sticky top-[64px] bg-background-light dark:bg-background-dark z-20 py-1"
             )}>
                 <div className={cn(
-                    "flex flex-1 overflow-x-auto no-scrollbar gap-2 py-2 flex-nowrap"
+                    "flex flex-1 overflow-x-auto no-scrollbar gap-2 py-1 flex-nowrap"
                 )}>
                     {tabs.map(tab => {
                         const longPressHandlers = getLongPressHandlers(() => handleTabLongPress(tab.id));
@@ -520,7 +520,7 @@ export default function BlogClient({
                                         }
                                     }}
                                     className={cn(
-                                        "px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all",
+                                        "px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all",
                                         activeTabId === tab.id ? "bg-primary text-white shadow-md" : "bg-slate-200 dark:bg-black/30 text-slate-500 dark:text-slate-400"
                                     )}
                                 >
@@ -530,12 +530,30 @@ export default function BlogClient({
                         );
                     })}
                 </div>
-                <button
-                    onClick={() => setShowTabManager(!showTabManager)}
-                    className="flex-shrink-0 size-9 rounded-full bg-slate-200 dark:bg-black/30 text-slate-500 dark:text-slate-400 flex items-center justify-center"
-                >
-                    <span className="material-symbols-outlined text-xl">{showTabManager ? 'close' : 'add'}</span>
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                        onClick={() => {
+                            const next = !isPromptOn;
+                            setIsPromptOn(next);
+                            localStorage.setItem('blog_prompt_enabled', String(next));
+                            showToast(next ? 'AI 프롬프트 기능이 켜졌습니다.' : 'AI 프롬프트 기능이 꺼졌습니다.');
+                        }}
+                        className={cn(
+                            "px-2.5 py-1.5 rounded-full text-[11px] font-black transition-all flex items-center gap-1 shrink-0",
+                            isPromptOn ? "bg-primary text-white shadow-sm" : "bg-slate-200 dark:bg-black/30 text-slate-500 dark:text-slate-400"
+                        )}
+                        title="저장 시 AI 프롬프트 분석 실행 여부"
+                    >
+                        <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                        <span>PROMPT {isPromptOn ? 'ON' : 'OFF'}</span>
+                    </button>
+                    <button
+                        onClick={() => setShowTabManager(!showTabManager)}
+                        className="size-8 rounded-full bg-slate-200 dark:bg-black/30 text-slate-500 dark:text-slate-400 flex items-center justify-center shrink-0"
+                    >
+                        <span className="material-symbols-outlined text-lg">{showTabManager ? 'close' : 'add'}</span>
+                    </button>
+                </div>
             </div>
 
             {showTabManager && (
@@ -566,32 +584,6 @@ export default function BlogClient({
                     </button>
                 </div>
             )}
-
-            {/* AI Prompt ON/OFF Toggle Bar */}
-            <div className="flex items-center justify-between bg-white dark:bg-slate-900/50 rounded-2xl p-3.5 border border-slate-100 dark:border-primary/10 shadow-sm mb-4">
-                <div className="flex items-center gap-2.5">
-                    <span className="material-symbols-outlined text-primary text-xl">auto_awesome</span>
-                    <div>
-                        <p className="text-xs font-bold text-slate-900 dark:text-slate-100">AI 프롬프트 분석</p>
-                        <p className="text-[10px] text-slate-400">저장 시 설정된 프롬프트로 AI 요약을 함께 생성합니다.</p>
-                    </div>
-                </div>
-                <button
-                    onClick={() => {
-                        const next = !isPromptOn;
-                        setIsPromptOn(next);
-                        localStorage.setItem('blog_prompt_enabled', String(next));
-                        showToast(next ? 'AI 프롬프트 기능이 켜졌습니다.' : 'AI 프롬프트 기능이 꺼졌습니다.');
-                    }}
-                    className={cn(
-                        "px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 shrink-0",
-                        isPromptOn ? "bg-primary text-white shadow-sm" : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500"
-                    )}
-                >
-                    <span className="material-symbols-outlined text-sm">{isPromptOn ? 'toggle_on' : 'toggle_off'}</span>
-                    {isPromptOn ? 'ON' : 'OFF'}
-                </button>
-            </div>
 
 
             {isLoading ? (
