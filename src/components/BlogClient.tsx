@@ -22,6 +22,11 @@ export default function BlogClient({
 }) {
   const [recommendPosts, setRecommendPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMoreLoading, setIsMoreLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastElementRef = useRef<HTMLDivElement | null>(null);
   const [addingUrl, setAddingUrl] = useState<string | null>(null);
   const [savedUrls, setSavedUrls] = useState<Set<string>>(new Set(initialSavedBlogs.map(b => b.url)));
   const [savedBlogs, setSavedBlogs] = useState<any[]>(initialSavedBlogs);
@@ -66,34 +71,79 @@ export default function BlogClient({
     localStorage.setItem('blog_view_mode', viewMode);
   }, [viewMode]);
 
-  const fetchRecommend = async () => {
+  const fetchRecommend = async (isInitial = false) => {
     if (!activeTabId) {
       setRecommendPosts([]);
       setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
+    const nextPage = isInitial ? 1 : page + 1;
+
+    if (isInitial) {
+      setIsLoading(true);
+      setRecommendPosts([]);
+      setPage(1);
+      setHasMore(true);
+    } else {
+      if (!hasMore || isMoreLoading) return;
+      setIsMoreLoading(true);
+    }
+
     try {
       let fetchUrl = '/api/blog/list';
       const activeTab = tabs.find(t => t.id === activeTabId);
       if (activeTab) {
-        fetchUrl += `?blogId=${encodeURIComponent(activeTab.url)}`;
+        fetchUrl += `?blogId=${encodeURIComponent(activeTab.url)}&page=${nextPage}`;
       } else {
           setRecommendPosts([]);
           setIsLoading(false);
+          setIsMoreLoading(false);
           return;
       }
 
       const res = await fetch(fetchUrl);
       const data = await res.json();
-      setRecommendPosts(data.posts || []);
+      const newPosts = data.posts || [];
+
+      if (newPosts.length === 0) {
+        setHasMore(false);
+      } else {
+        if (isInitial) {
+          setRecommendPosts(newPosts);
+        } else {
+          setRecommendPosts(prev => {
+            const existingUrls = new Set(prev.map(p => p.url));
+            const uniqueNewPosts = newPosts.filter((p: any) => !existingUrls.has(p.url));
+            if (uniqueNewPosts.length === 0) setHasMore(false);
+            return [...prev, ...uniqueNewPosts];
+          });
+        }
+        setPage(nextPage);
+      }
     } catch (err) {
       console.error(err);
+      setHasMore(false);
     } finally {
       setIsLoading(false);
+      setIsMoreLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isLoading || isMoreLoading || !hasMore || viewMode !== 'recommend') return;
+    if (observer.current) observer.current.disconnect();
+
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        fetchRecommend(false);
+      }
+    });
+
+    if (lastElementRef.current) {
+      observer.current.observe(lastElementRef.current);
+    }
+  }, [recommendPosts, isLoading, isMoreLoading, hasMore, viewMode]);
 
   useEffect(() => {
     const savedTab = localStorage.getItem('blog_recommend_tab');
@@ -107,7 +157,7 @@ export default function BlogClient({
   useEffect(() => {
     if (activeTabId) {
       localStorage.setItem('blog_recommend_tab', activeTabId);
-      fetchRecommend();
+      fetchRecommend(true);
     }
   }, [activeTabId, tabs]);
 
@@ -554,7 +604,7 @@ export default function BlogClient({
                 <div className="space-y-3 select-none">
                     {recommendPosts.map((post, idx) => (
                         <RecommendItem
-                          key={idx}
+                          key={post.url + idx}
                           post={post}
                           addingUrl={addingUrl}
                           isSaved={savedUrls.has(post.url)}
@@ -565,6 +615,14 @@ export default function BlogClient({
                           onPointerDown={handlePointerDown}
                         />
                     ))}
+
+                    {hasMore && (
+                      <div ref={lastElementRef} className="h-20 flex items-center justify-center">
+                        {isMoreLoading && (
+                          <div className="size-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        )}
+                      </div>
+                    )}
                 </div>
             )
             }
