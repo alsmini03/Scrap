@@ -350,23 +350,29 @@ export async function extractBlogSummary(blogContent: string, apiKey: string, mo
     // Collect images embedded in blog post
     const imageUrls: string[] = [];
     $("img").each((_, el) => {
-        const src = $(el).attr("data-src") || $(el).attr("data-lazy-src") || $(el).attr("src") || "";
+        let src = $(el).attr("data-lazy-src") || $(el).attr("data-src") || $(el).attr("src") || "";
+        if (src.startsWith("//")) {
+            src = "https:" + src;
+        }
+
+        const lowerSrc = src.toLowerCase();
         if (
             src &&
             src.startsWith("http") &&
-            !src.includes("sticker") &&
-            !src.includes("emoticon") &&
-            !src.includes("profile") &&
-            !src.includes("icon") &&
-            !src.includes("static.naver") &&
-            !src.includes("post-phinf") === false // include post-phinf images
+            !lowerSrc.includes("sticker") &&
+            !lowerSrc.includes("emoticon") &&
+            !lowerSrc.includes("profile") &&
+            !lowerSrc.includes("icon") &&
+            !lowerSrc.includes("static.naver") &&
+            !lowerSrc.includes("type=s1") &&
+            !lowerSrc.includes("og_default")
         ) {
             imageUrls.push(src);
         }
     });
 
-    // Deduplicate and limit to up to 5 main images
-    const uniqueImages = Array.from(new Set(imageUrls)).slice(0, 5);
+    // Deduplicate and limit to up to 10 main images
+    const uniqueImages = Array.from(new Set(imageUrls)).slice(0, 10);
     const model = genAI.getGenerativeModel({ model: geminiModel });
 
     let extractedImagesText = "";
@@ -390,7 +396,7 @@ export async function extractBlogSummary(blogContent: string, apiKey: string, mo
                     const base64Img = Buffer.from(arrayBuffer).toString("base64");
 
                     const imgResult = await model.generateContent([
-                        "이 이미지에 포함된 모든 텍스트와 핵심 시각적 정보(표, 차트, 본문 내용 등)를 정확하게 추출해 주세요. 텍스트가 없다면 '텍스트 없음'이라고 답해 주세요.",
+                        "이 이미지에 포함된 한글 및 영문 텍스트, 숫자, 표, 사주 명조, 차트, 도표 등의 모든 내용을 있는 그대로 정확하게 읽어서 반환해 주세요. 이미지가 사람이 읽을 수 있는 텍스트나 사주 한자/글자를 담고 있다면 그대로 전사해 주세요. 만약 아무런 글자나 텍스트가 없는 순수 배경/풍경 풍의 감성 이미지라면 '텍스트 없음'이라고 답변해 주세요.",
                         {
                             inlineData: {
                                 data: base64Img,
