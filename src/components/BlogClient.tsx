@@ -676,13 +676,15 @@ export default function BlogClient({
                           <h3 className="font-bold text-slate-900 dark:text-slate-100 line-clamp-2 leading-tight mb-2 flex-1">
                             {blog.title}
                           </h3>
-                          {isEditMode && (
+                          {isEditMode ? (
                             <div className={cn(
                               "size-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 mt-0.5",
                               isSelected ? "bg-primary border-primary text-white" : "border-slate-300 text-transparent"
                             )}>
                               <span className="material-symbols-outlined text-[12px] font-bold">check</span>
                             </div>
+                          ) : (
+                            <span className="material-symbols-outlined text-slate-400 text-lg shrink-0 mt-0.5" title="저장됨">task_alt</span>
                           )}
                         </div>
                         <div className="flex justify-between items-center text-[10px] text-slate-400">
