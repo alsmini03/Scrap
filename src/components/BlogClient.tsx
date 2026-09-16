@@ -676,14 +676,7 @@ export default function BlogClient({
                           <h3 className="font-bold text-slate-900 dark:text-slate-100 line-clamp-2 leading-tight mb-2 flex-1">
                             {blog.title}
                           </h3>
-                          {isEditMode ? (
-                            <div className={cn(
-                              "size-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 mt-0.5",
-                              isSelected ? "bg-primary border-primary text-white" : "border-slate-300 text-transparent"
-                            )}>
-                              <span className="material-symbols-outlined text-[12px] font-bold">check</span>
-                            </div>
-                          ) : (
+                          {!isEditMode && (
                             <span className="material-symbols-outlined text-slate-400 text-lg shrink-0 mt-0.5" title="저장됨">task_alt</span>
                           )}
                         </div>
@@ -884,14 +877,7 @@ const RecommendItem = memo(({ post, addingUrl, isSaved, isEditMode, isSelected, 
               </div>
           </div>
       </a>
-      {isEditMode ? (
-          <div className={cn(
-              "size-6 rounded-full border-2 flex items-center justify-center transition-all mr-1",
-              isSelected ? "bg-primary border-primary" : "border-slate-200 dark:border-slate-700"
-          )}>
-              {isSelected && <span className="material-symbols-outlined text-white text-[14px] font-bold">check</span>}
-          </div>
-      ) : (
+      {!isEditMode && (
         <button
             onClick={() => { if (!isSaved) onAdd(post); }}
             disabled={addingUrl === post.url || isSaved}
