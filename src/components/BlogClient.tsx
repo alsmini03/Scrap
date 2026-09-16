@@ -38,6 +38,7 @@ export default function BlogClient({
   const [isDragging, setIsDragging] = useState(false);
   const [isEmailing, setIsEmailing] = useState(false);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
+  const [saveProgress, setSaveProgress] = useState<{ current: number; total: number } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const isProcessing = isEmailing || isSavingBatch || isDeleting;
 
@@ -417,10 +418,19 @@ export default function BlogClient({
   const handleBatchSave = async () => {
       if (selectedUrls.length === 0) return;
       setIsSavingBatch(true);
+      const total = selectedUrls.length;
+      setSaveProgress({ current: 1, total });
       try {
           let count = 0;
-          for (const url of selectedUrls) {
-              if (savedUrls.has(url)) continue;
+          for (let i = 0; i < selectedUrls.length; i++) {
+              const url = selectedUrls[i];
+              setSaveProgress({ current: i + 1, total });
+
+              if (savedUrls.has(url)) {
+                  count++;
+                  continue;
+              }
+
               const post = recommendPosts.find(p => p.url === url);
               const res = await fetch('/api/blog/extract', {
                   method: 'POST',
@@ -450,6 +460,7 @@ export default function BlogClient({
           showToast('저장 중 오류가 발생했습니다.', 'error');
       } finally {
           setIsSavingBatch(false);
+          setSaveProgress(null);
       }
   };
 
@@ -724,10 +735,13 @@ export default function BlogClient({
                 <button
                   onClick={handleBatchSave}
                   disabled={selectedUrls.length === 0 || isProcessing}
-                  className="px-4 py-2 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 text-xs"
+                  className="px-4 py-2 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 text-xs whitespace-nowrap"
                 >
                   {isSavingBatch ? (
-                    <div className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="flex items-center gap-1.5">
+                      <div className="size-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>{saveProgress ? `${saveProgress.current}/${saveProgress.total}` : '저장 중...'}</span>
+                    </div>
                   ) : (
                     <>
                       <span className="material-symbols-outlined text-sm">bookmark</span>
