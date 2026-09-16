@@ -571,6 +571,7 @@ const SavedItem = memo(({ item, isEditMode, isSelected, hasError, onPointerDown,
         </div>
 
         <div className="flex items-center gap-1 pr-2">
+            <span className="material-symbols-outlined text-slate-400 text-lg" title="저장됨">task_alt</span>
             {isEditMode ? (
                 <div className={cn(
                     "size-5 rounded-full border-2 flex items-center justify-center transition-all mr-1",
@@ -579,23 +580,20 @@ const SavedItem = memo(({ item, isEditMode, isSelected, hasError, onPointerDown,
                     {isSelected && <span className="material-symbols-outlined text-white text-[12px] font-bold">check</span>}
                 </div>
             ) : (
-                <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-slate-400 text-lg" title="저장됨">task_alt</span>
-                    <button
-                        onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onToggleLike(item.type, item.id, item.is_liked);
-                        }}
-                        className={cn(
-                        "size-8 flex items-center justify-center rounded-full transition-all active:scale-125 z-10",
-                        item.is_liked ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800"
-                        )}
-                        title="좋아요"
-                    >
-                        <span className={cn("material-symbols-outlined text-lg", item.is_liked && "fill-1")}>favorite</span>
-                    </button>
-                </div>
+                <button
+                    onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggleLike(item.type, item.id, item.is_liked);
+                    }}
+                    className={cn(
+                    "size-8 flex items-center justify-center rounded-full transition-all active:scale-125 z-10",
+                    item.is_liked ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800"
+                    )}
+                    title="좋아요"
+                >
+                    <span className={cn("material-symbols-outlined text-lg", item.is_liked && "fill-1")}>favorite</span>
+                </button>
             )}
         </div>
       </Link>
