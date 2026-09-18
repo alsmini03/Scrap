@@ -22,11 +22,6 @@ export default function BlogClient({
 }) {
   const [recommendPosts, setRecommendPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isMoreLoading, setIsMoreLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const observer = useRef<IntersectionObserver | null>(null);
-  const lastElementRef = useRef<HTMLDivElement | null>(null);
   const [addingUrl, setAddingUrl] = useState<string | null>(null);
   const [savedUrls, setSavedUrls] = useState<Set<string>>(new Set(initialSavedBlogs.map(b => b.url)));
   const [savedBlogs, setSavedBlogs] = useState<any[]>(initialSavedBlogs);
@@ -38,7 +33,6 @@ export default function BlogClient({
   const [isDragging, setIsDragging] = useState(false);
   const [isEmailing, setIsEmailing] = useState(false);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
-  const [saveProgress, setSaveProgress] = useState<{ current: number; total: number } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const isProcessing = isEmailing || isSavingBatch || isDeleting;
 
@@ -72,79 +66,34 @@ export default function BlogClient({
     localStorage.setItem('blog_view_mode', viewMode);
   }, [viewMode]);
 
-  const fetchRecommend = async (isInitial = false) => {
+  const fetchRecommend = async () => {
     if (!activeTabId) {
       setRecommendPosts([]);
       setIsLoading(false);
       return;
     }
 
-    const nextPage = isInitial ? 1 : page + 1;
-
-    if (isInitial) {
-      setIsLoading(true);
-      setRecommendPosts([]);
-      setPage(1);
-      setHasMore(true);
-    } else {
-      if (!hasMore || isMoreLoading) return;
-      setIsMoreLoading(true);
-    }
-
+    setIsLoading(true);
     try {
       let fetchUrl = '/api/blog/list';
       const activeTab = tabs.find(t => t.id === activeTabId);
       if (activeTab) {
-        fetchUrl += `?blogId=${encodeURIComponent(activeTab.url)}&page=${nextPage}`;
+        fetchUrl += `?blogId=${encodeURIComponent(activeTab.url)}`;
       } else {
           setRecommendPosts([]);
           setIsLoading(false);
-          setIsMoreLoading(false);
           return;
       }
 
       const res = await fetch(fetchUrl);
       const data = await res.json();
-      const newPosts = data.posts || [];
-
-      if (newPosts.length === 0) {
-        setHasMore(false);
-      } else {
-        if (isInitial) {
-          setRecommendPosts(newPosts);
-        } else {
-          setRecommendPosts(prev => {
-            const existingUrls = new Set(prev.map(p => p.url));
-            const uniqueNewPosts = newPosts.filter((p: any) => !existingUrls.has(p.url));
-            if (uniqueNewPosts.length === 0) setHasMore(false);
-            return [...prev, ...uniqueNewPosts];
-          });
-        }
-        setPage(nextPage);
-      }
+      setRecommendPosts(data.posts || []);
     } catch (err) {
       console.error(err);
-      setHasMore(false);
     } finally {
       setIsLoading(false);
-      setIsMoreLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (isLoading || isMoreLoading || !hasMore || viewMode !== 'recommend') return;
-    if (observer.current) observer.current.disconnect();
-
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting) {
-        fetchRecommend(false);
-      }
-    });
-
-    if (lastElementRef.current) {
-      observer.current.observe(lastElementRef.current);
-    }
-  }, [recommendPosts, isLoading, isMoreLoading, hasMore, viewMode]);
 
   useEffect(() => {
     const savedTab = localStorage.getItem('blog_recommend_tab');
@@ -158,7 +107,7 @@ export default function BlogClient({
   useEffect(() => {
     if (activeTabId) {
       localStorage.setItem('blog_recommend_tab', activeTabId);
-      fetchRecommend(true);
+      fetchRecommend();
     }
   }, [activeTabId, tabs]);
 
@@ -418,19 +367,10 @@ export default function BlogClient({
   const handleBatchSave = async () => {
       if (selectedUrls.length === 0) return;
       setIsSavingBatch(true);
-      const total = selectedUrls.length;
-      setSaveProgress({ current: 1, total });
       try {
           let count = 0;
-          for (let i = 0; i < selectedUrls.length; i++) {
-              const url = selectedUrls[i];
-              setSaveProgress({ current: i + 1, total });
-
-              if (savedUrls.has(url)) {
-                  count++;
-                  continue;
-              }
-
+          for (const url of selectedUrls) {
+              if (savedUrls.has(url)) continue;
               const post = recommendPosts.find(p => p.url === url);
               const res = await fetch('/api/blog/extract', {
                   method: 'POST',
@@ -460,7 +400,6 @@ export default function BlogClient({
           showToast('저장 중 오류가 발생했습니다.', 'error');
       } finally {
           setIsSavingBatch(false);
-          setSaveProgress(null);
       }
   };
 
@@ -504,12 +443,12 @@ export default function BlogClient({
       <main className="mt-4 px-4">
         {viewMode === 'recommend' ? (
           <>
-            {/* Blog Source Tabs & Controls Header */}
+            {/* Blog Source Tabs */}
             <div className={cn(
-                "flex items-center gap-2 mb-4 -mx-4 px-4 sticky top-[64px] bg-background-light dark:bg-background-dark z-20 py-1"
+                "flex items-center gap-2 mb-6 -mx-4 px-4 sticky top-[64px] bg-background-light dark:bg-background-dark z-20"
             )}>
                 <div className={cn(
-                    "flex flex-1 overflow-x-auto no-scrollbar gap-2 py-1 flex-nowrap"
+                    "flex flex-1 overflow-x-auto no-scrollbar gap-2 py-2 flex-nowrap"
                 )}>
                     {tabs.map(tab => {
                         const longPressHandlers = getLongPressHandlers(() => handleTabLongPress(tab.id));
@@ -531,7 +470,7 @@ export default function BlogClient({
                                         }
                                     }}
                                     className={cn(
-                                        "px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all",
+                                        "px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all",
                                         activeTabId === tab.id ? "bg-primary text-white shadow-md" : "bg-slate-200 dark:bg-black/30 text-slate-500 dark:text-slate-400"
                                     )}
                                 >
@@ -541,30 +480,12 @@ export default function BlogClient({
                         );
                     })}
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                        onClick={() => {
-                            const next = !isPromptOn;
-                            setIsPromptOn(next);
-                            localStorage.setItem('blog_prompt_enabled', String(next));
-                            showToast(next ? 'AI 프롬프트 기능이 켜졌습니다.' : 'AI 프롬프트 기능이 꺼졌습니다.');
-                        }}
-                        className={cn(
-                            "px-2.5 py-1.5 rounded-full text-[11px] font-black transition-all flex items-center gap-1 shrink-0",
-                            isPromptOn ? "bg-primary text-white shadow-sm" : "bg-slate-200 dark:bg-black/30 text-slate-500 dark:text-slate-400"
-                        )}
-                        title="저장 시 AI 프롬프트 분석 실행 여부"
-                    >
-                        <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
-                        <span>{isPromptOn ? 'ON' : 'OFF'}</span>
-                    </button>
-                    <button
-                        onClick={() => setShowTabManager(!showTabManager)}
-                        className="size-8 rounded-full bg-slate-200 dark:bg-black/30 text-slate-500 dark:text-slate-400 flex items-center justify-center shrink-0"
-                    >
-                        <span className="material-symbols-outlined text-lg">{showTabManager ? 'close' : 'add'}</span>
-                    </button>
-                </div>
+                <button
+                    onClick={() => setShowTabManager(!showTabManager)}
+                    className="flex-shrink-0 size-9 rounded-full bg-slate-200 dark:bg-black/30 text-slate-500 dark:text-slate-400 flex items-center justify-center"
+                >
+                    <span className="material-symbols-outlined text-xl">{showTabManager ? 'close' : 'add'}</span>
+                </button>
             </div>
 
             {showTabManager && (
@@ -596,6 +517,32 @@ export default function BlogClient({
                 </div>
             )}
 
+            {/* AI Prompt ON/OFF Toggle Bar */}
+            <div className="flex items-center justify-between bg-white dark:bg-slate-900/50 rounded-2xl p-3.5 border border-slate-100 dark:border-primary/10 shadow-sm mb-4">
+                <div className="flex items-center gap-2.5">
+                    <span className="material-symbols-outlined text-primary text-xl">auto_awesome</span>
+                    <div>
+                        <p className="text-xs font-bold text-slate-900 dark:text-slate-100">AI 프롬프트 분석</p>
+                        <p className="text-[10px] text-slate-400">저장 시 설정된 프롬프트로 AI 요약을 함께 생성합니다.</p>
+                    </div>
+                </div>
+                <button
+                    onClick={() => {
+                        const next = !isPromptOn;
+                        setIsPromptOn(next);
+                        localStorage.setItem('blog_prompt_enabled', String(next));
+                        showToast(next ? 'AI 프롬프트 기능이 켜졌습니다.' : 'AI 프롬프트 기능이 꺼졌습니다.');
+                    }}
+                    className={cn(
+                        "px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 shrink-0",
+                        isPromptOn ? "bg-primary text-white shadow-sm" : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500"
+                    )}
+                >
+                    <span className="material-symbols-outlined text-sm">{isPromptOn ? 'toggle_on' : 'toggle_off'}</span>
+                    {isPromptOn ? 'ON' : 'OFF'}
+                </button>
+            </div>
+
 
             {isLoading ? (
                 <div className="space-y-3">
@@ -607,7 +554,7 @@ export default function BlogClient({
                 <div className="space-y-3 select-none">
                     {recommendPosts.map((post, idx) => (
                         <RecommendItem
-                          key={post.url + idx}
+                          key={idx}
                           post={post}
                           addingUrl={addingUrl}
                           isSaved={savedUrls.has(post.url)}
@@ -618,14 +565,6 @@ export default function BlogClient({
                           onPointerDown={handlePointerDown}
                         />
                     ))}
-
-                    {hasMore && (
-                      <div ref={lastElementRef} className="h-20 flex items-center justify-center">
-                        {isMoreLoading && (
-                          <div className="size-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                        )}
-                      </div>
-                    )}
                 </div>
             )
             }
@@ -687,7 +626,14 @@ export default function BlogClient({
                           <h3 className="font-bold text-slate-900 dark:text-slate-100 line-clamp-2 leading-tight mb-2 flex-1">
                             {blog.title}
                           </h3>
-                          <span className="material-symbols-outlined text-slate-400 text-lg shrink-0 mt-0.5" title="저장됨">task_alt</span>
+                          {isEditMode && (
+                            <div className={cn(
+                              "size-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 mt-0.5",
+                              isSelected ? "bg-primary border-primary text-white" : "border-slate-300 text-transparent"
+                            )}>
+                              <span className="material-symbols-outlined text-[12px] font-bold">check</span>
+                            </div>
+                          )}
                         </div>
                         <div className="flex justify-between items-center text-[10px] text-slate-400">
                           <span className="text-primary font-bold">{blog.author}</span>
@@ -735,13 +681,10 @@ export default function BlogClient({
                 <button
                   onClick={handleBatchSave}
                   disabled={selectedUrls.length === 0 || isProcessing}
-                  className="px-4 py-2 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 text-xs whitespace-nowrap"
+                  className="px-4 py-2 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 text-xs"
                 >
                   {isSavingBatch ? (
-                    <div className="flex items-center gap-1.5">
-                      <div className="size-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>{saveProgress ? `${saveProgress.current}/${saveProgress.total}` : '저장 중...'}</span>
-                    </div>
+                    <div className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
                       <span className="material-symbols-outlined text-sm">bookmark</span>
@@ -889,29 +832,31 @@ const RecommendItem = memo(({ post, addingUrl, isSaved, isEditMode, isSelected, 
               </div>
           </div>
       </a>
-      <button
-          onClick={(e) => {
-              if (isEditMode) {
-                  e.preventDefault();
-                  onToggleSelect(post.url);
-              } else if (!isSaved) {
-                  onAdd(post);
-              }
-          }}
-          disabled={!isEditMode && (addingUrl === post.url || isSaved)}
-          className={cn(
-              "size-10 flex-shrink-0 rounded-xl flex items-center justify-center transition-all disabled:opacity-50",
-              isSaved
-                  ? "bg-slate-100 dark:bg-slate-800 text-slate-400"
-                  : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
-          )}
-          title={isSaved ? "이미 저장됨" : "내 서재에 추가"}
-      >
-          {addingUrl === post.url ? (
-              <div className="size-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-          ) : (
-              <span className="material-symbols-outlined">{isSaved ? 'task_alt' : 'library_add'}</span>
-          )}
-      </button>
+      {isEditMode ? (
+          <div className={cn(
+              "size-6 rounded-full border-2 flex items-center justify-center transition-all mr-1",
+              isSelected ? "bg-primary border-primary" : "border-slate-200 dark:border-slate-700"
+          )}>
+              {isSelected && <span className="material-symbols-outlined text-white text-[14px] font-bold">check</span>}
+          </div>
+      ) : (
+        <button
+            onClick={() => { if (!isSaved) onAdd(post); }}
+            disabled={addingUrl === post.url || isSaved}
+            className={cn(
+                "size-10 flex-shrink-0 rounded-xl flex items-center justify-center transition-all disabled:opacity-50",
+                isSaved
+                    ? "bg-slate-100 dark:bg-slate-800 text-slate-400"
+                    : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
+            )}
+            title={isSaved ? "이미 저장됨" : "내 서재에 추가"}
+        >
+            {addingUrl === post.url ? (
+                <div className="size-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            ) : (
+                <span className="material-symbols-outlined">{isSaved ? 'task_alt' : 'library_add'}</span>
+            )}
+        </button>
+      )}
   </div>
 ));

@@ -3,10 +3,11 @@
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { useEffect, useState, memo, useRef, useMemo } from 'react';
-import { addReportTab, deleteReportTab, updateReportTabOrder, saveReport, getGeminiModels, getGeminiPrompts, getResolvedReportUrlAction, getAdjacentReportIdsAction, toggleLikeAction, addToQueue, getQueueItems, retryGeminiTaskAction, deleteReport, sendBatchEmailAction, updateReportContentAction } from '@/lib/db';
+import { addReportTab, deleteReportTab, updateReportTabOrder, saveReport, getGeminiModels, getGeminiPrompts, getResolvedReportUrlAction, getAdjacentReportIdsAction, toggleLikeAction, addToQueue, getQueueItems, retryGeminiTaskAction, deleteReport, sendBatchEmailAction } from '@/lib/db';
 import { cn, formatDateToYMD, getLongPressHandlers } from '@/lib/utils';
 import { showToast } from '@/components/Toast';
 import TabManagementModal from '@/components/TabManagementModal';
+import GeminiSettingsModal from '@/components/GeminiSettingsModal';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { marked } from 'marked';
 import QueueStatus from '@/components/QueueStatus';
@@ -35,8 +36,6 @@ interface Report {
   gemini_model?: string;
   url?: string;
   naverUrl?: string;
-  researchId?: string;
-  category?: string;
 }
 
 interface ReportContent {
@@ -82,7 +81,6 @@ export default function ReportClient({
   const [page, setPage] = useState(1);
 
   const searchParams = useSearchParams();
-  const fromSaved = searchParams.get('from') === 'saved';
   const router = useRouter();
 
   // Interaction State
@@ -91,6 +89,7 @@ export default function ReportClient({
   const [savedReports, setSavedReports] = useState<any[]>(initialSavedReports);
   const [isCopying, setIsCopying] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
+  const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
 
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedMyIds, setSelectedMyIds] = useState<string[]>([]);
@@ -232,47 +231,23 @@ export default function ReportClient({
     setIsContentLoading(true);
     setIsDetailLoading(true);
     try {
-      const [adj, { items, lastProcessedAt: last }] = await Promise.all([
+      const reportCategory = selectedRecommendReport?.fileNum || selectedSavedReport?.fileNum || 'company';
+      const [res, adj, { items, lastProcessedAt: last }] = await Promise.all([
+        fetch('/api/report/content', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ num: reportId, category: reportCategory })
+        }),
         getAdjacentReportIdsAction(reportId),
         getQueueItems()
       ]);
+      const html = await res.text();
+      setViewingContent({ id: reportId, content: html });
       setAdjacentIds(adj);
 
       const qItem = items.find(i => i.type === 'report' && i.target_id === reportId);
       setCurrentQueueItem(qItem || null);
       setLastProcessedAt(last);
-
-      if (selectedSavedReport) {
-        if (selectedSavedReport.content && selectedSavedReport.content.trim().length > 0) {
-          setViewingContent({ id: reportId, content: selectedSavedReport.content });
-        } else {
-          const numToFetch = selectedSavedReport.research_id || selectedSavedReport.researchId || reportId;
-          const reportCategory = selectedSavedReport.category || selectedSavedReport.fileNum || 'company';
-
-          const res = await fetch('/api/report/content', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ num: numToFetch, category: reportCategory })
-          });
-          const html = await res.text();
-          setViewingContent({ id: reportId, content: html });
-
-          if (html && !html.startsWith('<p>내용을 불러올 수 없습니다.')) {
-            await updateReportContentAction(selectedSavedReport.id, html);
-          }
-        }
-      } else {
-        const numToFetch = selectedRecommendReport?.researchId || reportId;
-        const reportCategory = selectedRecommendReport?.fileNum || selectedRecommendReport?.category || 'company';
-
-        const res = await fetch('/api/report/content', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ num: numToFetch, category: reportCategory })
-        });
-        const html = await res.text();
-        setViewingContent({ id: reportId, content: html });
-      }
     } catch (err) {
       console.error(err);
       showToast('내용을 불러오는 중 오류가 발생했습니다.', 'error');
@@ -393,9 +368,7 @@ export default function ReportClient({
         summary: '',
         content: viewingContent?.id === report.id ? viewingContent.content : '',
         itemName: report.itemName,
-        itemCode: report.itemCode,
-        researchId: report.researchId || report.id,
-        category: report.fileNum || report.category || 'company'
+        itemCode: report.itemCode
       });
 
       if (result.success && result.id) {
@@ -758,6 +731,13 @@ export default function ReportClient({
                                  currentQueueItem.status === 'failed' ? '실패' : '대기 중'}
                             </span>
                         )}
+                        <button
+                            onClick={() => setIsGeminiModalOpen(true)}
+                            className="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors"
+                            title="Gemini 설정 변경"
+                        >
+                            <span className="material-symbols-outlined text-lg">settings_suggest</span>
+                        </button>
                         <button
                             onClick={handleRetrySummary}
                             disabled={isRetrying || currentQueueItem?.status === 'processing'}
@@ -1271,7 +1251,13 @@ export default function ReportClient({
         </div>
       )}
 
-      <BottomNav activeTab={fromSaved || selectedReportId ? 'saved' : 'report'} />
+      <BottomNav activeTab="report" />
+
+      <GeminiSettingsModal
+        isOpen={isGeminiModalOpen}
+        onClose={() => setIsGeminiModalOpen(false)}
+        category="report"
+      />
 
       <TabManagementModal
         isOpen={isModalOpen}

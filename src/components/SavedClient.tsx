@@ -469,22 +469,22 @@ const SavedItem = memo(({ item, isEditMode, isSelected, hasError, onPointerDown,
   let typeLabel = '';
 
   if (item.type === 'youtube') {
-    href = `/youtube/${item.id}?from=saved`;
+    href = `/youtube/${item.id}`;
     icon = 'video_library';
     iconColor = 'text-red-500 bg-red-50 dark:bg-red-500/10';
     typeLabel = 'YouTube';
   } else if (item.type === 'blog') {
-    href = `/blog/${item.id}?from=saved`;
+    href = `/blog/${item.id}`;
     icon = 'rss_feed';
     iconColor = 'text-green-500 bg-green-50 dark:bg-green-500/10';
     typeLabel = '블로그';
   } else if (item.type === 'report') {
-    href = `/report?id=${item.id}&from=saved`;
+    href = `/report?id=${item.id}`;
     icon = 'description';
     iconColor = 'text-blue-500 bg-blue-50 dark:bg-blue-500/10';
     typeLabel = '리포트';
   } else if (item.type === 'book') {
-    href = `/book/${item.id}?from=saved`;
+    href = `/book/${item.id}`;
     icon = 'menu_book';
     iconColor = 'text-amber-500 bg-amber-50 dark:bg-amber-500/10';
     typeLabel = 'Yes24';
@@ -558,7 +558,7 @@ const SavedItem = memo(({ item, isEditMode, isSelected, hasError, onPointerDown,
             item.type === 'youtube' ? "text-[13px] font-normal" : "text-sm font-bold"
           )}>
             {item.title}
-            {(hasError || (item.summary && item.summary.includes('AI 요약 실패'))) && (
+            {hasError && (
               <span className="material-symbols-outlined text-red-500 text-sm shrink-0" title="AI 요약 실패">error</span>
             )}
           </h3>
@@ -586,12 +586,12 @@ const SavedItem = memo(({ item, isEditMode, isSelected, hasError, onPointerDown,
                     onToggleLike(item.type, item.id, item.is_liked);
                     }}
                     className={cn(
-                    "size-8 flex items-center justify-center rounded-full transition-all active:scale-125 z-10",
+                    "size-9 flex items-center justify-center rounded-full transition-all active:scale-125 z-10",
                     item.is_liked ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800"
                     )}
                     title="좋아요"
                 >
-                    <span className={cn("material-symbols-outlined text-lg", item.is_liked && "fill-1")}>favorite</span>
+                    <span className={cn("material-symbols-outlined text-xl", item.is_liked && "fill-1")}>favorite</span>
                 </button>
             )}
         </div>

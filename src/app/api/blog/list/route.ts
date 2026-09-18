@@ -5,13 +5,12 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const blogIdParam = searchParams.get("blogId") || "totcar";
-    const page = parseInt(searchParams.get("page") || "1", 10);
     const blogIds = blogIdParam.split(',');
 
     // Limit to 10 posts per blog when fetching all to improve performance
     const limit = blogIds.length > 1 ? 10 : 0;
 
-    const blogPromises = blogIds.map(id => getBlogPosts(id, limit, page));
+    const blogPromises = blogIds.map(id => getBlogPosts(id, limit));
     const results = await Promise.all(blogPromises);
     let allPosts: any[] = results.flat();
 

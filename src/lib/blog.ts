@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import he from 'he';
 
-export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
+export async function getBlogPosts(idOrUrl: string, limit = 0) {
     let blogId = idOrUrl;
     let categoryNo = "";
     let isTistory = idOrUrl.includes("tistory.com");
@@ -25,50 +25,10 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
 
     let allPosts: any[] = [];
 
-    // For Naver blogs on page > 1, query PostTitleListAsync API
-    if (!isTistory && !isBrunch && page > 1) {
-        try {
-            const asyncUrl = `https://blog.naver.com/PostTitleListAsync.naver?blogId=${blogId}&viewdate=&currentPage=${page}&categoryNo=${categoryNo}&parentCategoryNo=&countPerPage=20`;
-            const response = await fetch(asyncUrl, {
-                headers: {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-                    "Referer": `https://blog.naver.com/${blogId}`
-                }
-            });
-            if (response.ok) {
-                const text = await response.text();
-                // Clean invalid JSON escaping like single quotes / unescaped tabs if any
-                const cleanText = text.replace(/\\([^"\\\/bfnrtu])/g, "$1");
-                const data = JSON.parse(cleanText);
-                const postList = data?.postList || [];
-                const blogTitle = data?.blogTitle ? decodeURIComponent(data.blogTitle.replace(/\+/g, ' ')) : blogId;
-
-                postList.forEach((item: any) => {
-                    const title = item.title ? decodeURIComponent(item.title.replace(/\+/g, ' ')) : '';
-                    const logNo = item.logNo;
-                    if (title && logNo) {
-                        allPosts.push({
-                            title,
-                            author: blogTitle,
-                            url: `https://m.blog.naver.com/${blogId}/${logNo}`,
-                            thumbnail: null,
-                            published_at: item.addDate || '',
-                            blogId
-                        });
-                    }
-                });
-
-                if (allPosts.length > 0) return allPosts;
-            }
-        } catch (e) {
-            console.error(`PostTitleListAsync failed for ${blogId} page ${page}`, e);
-        }
-    }
-
-    // RSS approach (for page 1)
+    // RSS approach
     if (isTistory && idOrUrl.includes('/category/')) {
         // Tistory Category: skip to scraping
-    } else if (page === 1) {
+    } else {
         let rssUrl = isTistory ? `https://${blogId}.tistory.com/rss` : `https://rss.blog.naver.com/${blogId}.xml`;
         if (!isTistory && categoryNo) {
             rssUrl += `?categoryNo=${categoryNo}`;

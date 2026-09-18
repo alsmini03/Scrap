@@ -15,8 +15,9 @@ import {
   retryGeminiTaskAction,
   processYoutubeSummaryImmediatelyAction
 } from '@/lib/db';
-import { notFound, useRouter, useParams, useSearchParams } from 'next/navigation';
+import { notFound, useRouter, useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
+import GeminiSettingsModal from '@/components/GeminiSettingsModal';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw';
@@ -66,21 +67,20 @@ const SkeletonYoutubeDetail = () => (
         <div className="h-64 w-full bg-slate-100 dark:bg-slate-800 rounded-2xl animate-skeleton" />
       </div>
     </main>
-    <BottomNav activeTab="youtube" />
+    <BottomNav activeTab="library" />
   </div>
 );
 
 export default function YoutubeDetailPage() {
   const params = useParams();
   const id = params?.id as string;
-  const searchParams = useSearchParams();
-  const fromSaved = searchParams.get('from') === 'saved';
   const router = useRouter();
   const [video, setVideo] = useState<YoutubeVideo | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
   const [isRefetching, setIsRefetching] = useState(false);
+  const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState('seokmin.kwon@samsung.com');
@@ -544,11 +544,20 @@ export default function YoutubeDetailPage() {
                    <span className="material-symbols-outlined text-primary">auto_awesome</span>
                    AI 요약 분석
                 </h2>
-                {video.summary && video.gemini_model && (
-                    <span className="text-[10px] font-black px-2 py-0.5 bg-primary/10 text-primary rounded-md uppercase tracking-tighter">
-                        {video.gemini_model}
-                    </span>
-                )}
+                <div className="flex items-center gap-2">
+                    {video.summary && video.gemini_model && (
+                        <span className="text-[10px] font-black px-2 py-0.5 bg-primary/10 text-primary rounded-md uppercase tracking-tighter">
+                            {video.gemini_model}
+                        </span>
+                    )}
+                    <button
+                        onClick={() => setIsGeminiModalOpen(true)}
+                        className="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors"
+                        title="Gemini 설정 변경"
+                    >
+                        <span className="material-symbols-outlined text-lg">settings_suggest</span>
+                    </button>
+                </div>
             </div>
 
             {/* AI Status Section */}
@@ -691,7 +700,13 @@ export default function YoutubeDetailPage() {
         </section>
       </main>
 
-      <BottomNav activeTab={fromSaved ? 'saved' : 'youtube'} />
+      <BottomNav activeTab="library" />
+
+      <GeminiSettingsModal
+        isOpen={isGeminiModalOpen}
+        onClose={() => setIsGeminiModalOpen(false)}
+        category="youtube"
+      />
     </div>
   );
 }

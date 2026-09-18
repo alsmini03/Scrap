@@ -8,7 +8,6 @@ async function callGeminiInteractionsAPI(apiKey: string, model: string, inputs: 
   const payload = {
     model: model,
     input: inputs,
-    store: true,
   };
 
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/interactions?key=${apiKey}`, {
@@ -344,87 +343,13 @@ export async function extractBlogSummary(blogContent: string, apiKey: string, mo
     const geminiModel = modelName || "gemini-1.5-flash";
     const userPrompt = promptText || "이 블로그 내용을 핵심 위주로 요약하고 분석해 주세요.";
 
+    // Clean HTML tags to plain text for prompt processing
     const $ = cheerio.load(blogContent || "");
     const cleanText = $.text().trim() || blogContent;
 
-    // Collect images embedded in blog post
-    const imageUrls: string[] = [];
-    $("img").each((_, el) => {
-        let src = $(el).attr("data-lazy-src") || $(el).attr("data-src") || $(el).attr("src") || "";
-        if (src.startsWith("//")) {
-            src = "https:" + src;
-        }
+    const fullPrompt = `${userPrompt}\n\n[블로그 글 내용]\n${cleanText.slice(0, 30000)}`;
 
-        const lowerSrc = src.toLowerCase();
-        if (
-            src &&
-            src.startsWith("http") &&
-            !lowerSrc.includes("sticker") &&
-            !lowerSrc.includes("emoticon") &&
-            !lowerSrc.includes("profile") &&
-            !lowerSrc.includes("icon") &&
-            !lowerSrc.includes("static.naver") &&
-            !lowerSrc.includes("type=s1") &&
-            !lowerSrc.includes("og_default")
-        ) {
-            imageUrls.push(src);
-        }
-    });
-
-    // Deduplicate and limit to up to 10 main images
-    const uniqueImages = Array.from(new Set(imageUrls)).slice(0, 10);
     const model = genAI.getGenerativeModel({ model: geminiModel });
-
-    let extractedImagesText = "";
-    if (uniqueImages.length > 0) {
-        const imageTexts: string[] = [];
-        for (let i = 0; i < uniqueImages.length; i++) {
-            const imgUrl = uniqueImages[i];
-            try {
-                const imgRes = await fetch(imgUrl, {
-                    headers: {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Referer": "https://m.blog.naver.com/"
-                    },
-                    signal: AbortSignal.timeout(5000)
-                });
-
-                if (imgRes.ok) {
-                    const contentType = imgRes.headers.get("content-type") || "image/jpeg";
-                    const mimeType = contentType.includes("png") ? "image/png" : contentType.includes("webp") ? "image/webp" : "image/jpeg";
-                    const arrayBuffer = await imgRes.arrayBuffer();
-                    const base64Img = Buffer.from(arrayBuffer).toString("base64");
-
-                    const imgResult = await model.generateContent([
-                        "이 이미지에 포함된 한글 및 영문 텍스트, 숫자, 표, 사주 명조, 차트, 도표 등의 모든 내용을 있는 그대로 정확하게 읽어서 반환해 주세요. 이미지가 사람이 읽을 수 있는 텍스트나 사주 한자/글자를 담고 있다면 그대로 전사해 주세요. 만약 아무런 글자나 텍스트가 없는 순수 배경/풍경 풍의 감성 이미지라면 '텍스트 없음'이라고 답변해 주세요.",
-                        {
-                            inlineData: {
-                                data: base64Img,
-                                mimeType: mimeType
-                            }
-                        }
-                    ]);
-
-                    const txt = imgResult.response.text().trim();
-                    if (txt && !txt.includes("텍스트 없음")) {
-                        imageTexts.push(`[이미지 #${i + 1} 추출 내용]\n${txt}`);
-                    }
-                }
-            } catch (imgErr) {
-                console.warn(`Failed to process blog image ${imgUrl}:`, imgErr);
-            }
-        }
-
-        if (imageTexts.length > 0) {
-            extractedImagesText = imageTexts.join("\n\n");
-        }
-    }
-
-    let fullPrompt = `${userPrompt}\n\n[블로그 텍스트 내용]\n${cleanText.slice(0, 25000)}`;
-    if (extractedImagesText) {
-        fullPrompt += `\n\n[블로그 첨부 이미지에서 추출된 텍스트 및 정보]\n${extractedImagesText}`;
-    }
-
     const result = await model.generateContent([{ text: fullPrompt }]);
     return result.response.text();
 }

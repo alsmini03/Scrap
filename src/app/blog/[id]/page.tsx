@@ -3,11 +3,12 @@
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { getBlogById, deleteBlog, sendBlogEmailAction, getAdjacentBlogIdsAction, toggleLikeAction, processBlogSummaryAction } from '@/lib/db';
-import { notFound, useParams, useRouter, useSearchParams } from 'next/navigation';
+import { notFound, useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { cn, formatDateToYMD, isThumbnailInContent } from '@/lib/utils';
 import { showToast } from '@/components/Toast';
 import { marked } from 'marked';
+import GeminiSettingsModal from '@/components/GeminiSettingsModal';
 
 const SkeletonBlogDetail = () => (
   <div className="font-display min-h-screen pb-24 bg-white dark:bg-background-dark text-slate-900 dark:text-slate-100">
@@ -42,14 +43,13 @@ const SkeletonBlogDetail = () => (
 export default function BlogDetailPage() {
   const params = useParams();
   const id = params?.id as string;
-  const searchParams = useSearchParams();
-  const fromSaved = searchParams.get('from') === 'saved';
   const router = useRouter();
   const [blog, setBlog] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
   const [isAiRunning, setIsAiRunning] = useState(false);
+  const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
 
   // Navigation states
   const [adjacentIds, setAdjacentIds] = useState<{ prevId?: string; prevTitle?: string; nextId?: string; nextTitle?: string }>({});
@@ -269,14 +269,23 @@ export default function BlogDetailPage() {
                   </span>
                 )}
               </div>
-              <button
-                onClick={handleRegenerateAi}
-                disabled={isAiRunning}
-                className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-primary/10 active:scale-95 transition-all disabled:opacity-50"
-              >
-                <span className={cn("material-symbols-outlined text-[13px]", isAiRunning && "animate-spin")}>refresh</span>
-                다시 가져오기
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setIsGeminiModalOpen(true)}
+                  className="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors"
+                  title="Gemini 설정 변경"
+                >
+                  <span className="material-symbols-outlined text-lg">settings_suggest</span>
+                </button>
+                <button
+                  onClick={handleRegenerateAi}
+                  disabled={isAiRunning}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-primary/10 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  <span className={cn("material-symbols-outlined text-[13px]", isAiRunning && "animate-spin")}>refresh</span>
+                  다시 가져오기
+                </button>
+              </div>
             </div>
             <div
               className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-300"
@@ -306,7 +315,13 @@ export default function BlogDetailPage() {
         />
       </main>
 
-      <BottomNav activeTab={fromSaved ? 'saved' : 'blog'} />
+      <BottomNav activeTab="blog" />
+
+      <GeminiSettingsModal
+        isOpen={isGeminiModalOpen}
+        onClose={() => setIsGeminiModalOpen(false)}
+        category="blog"
+      />
     </div>
   );
 }

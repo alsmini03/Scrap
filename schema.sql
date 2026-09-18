@@ -121,9 +121,7 @@ CREATE TABLE IF NOT EXISTS reports (
   added_at TEXT NOT NULL,
   is_liked BOOLEAN DEFAULT FALSE,
   item_name TEXT,
-  item_code TEXT,
-  research_id TEXT,
-  category TEXT
+  item_code TEXT
 );
 
 -- Naver Blogs Table
