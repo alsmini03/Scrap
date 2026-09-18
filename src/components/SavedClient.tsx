@@ -558,7 +558,7 @@ const SavedItem = memo(({ item, isEditMode, isSelected, hasError, onPointerDown,
             item.type === 'youtube' ? "text-[13px] font-normal" : "text-sm font-bold"
           )}>
             {item.title}
-            {hasError && (
+            {(hasError || (item.summary && item.summary.includes('AI 요약 실패'))) && (
               <span className="material-symbols-outlined text-red-500 text-sm shrink-0" title="AI 요약 실패">error</span>
             )}
           </h3>
@@ -571,7 +571,6 @@ const SavedItem = memo(({ item, isEditMode, isSelected, hasError, onPointerDown,
         </div>
 
         <div className="flex items-center gap-1 pr-2">
-            <span className="material-symbols-outlined text-slate-400 text-lg" title="저장됨">task_alt</span>
             {isEditMode ? (
                 <div className={cn(
                     "size-5 rounded-full border-2 flex items-center justify-center transition-all mr-1",

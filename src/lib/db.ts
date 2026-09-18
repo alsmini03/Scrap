@@ -1263,6 +1263,8 @@ export async function saveBlog(blog: {
           await checkAndRotateGeminiKeyIfNeeded(summary);
         } catch (aiErr: any) {
           console.error('saveBlog AI summary error:', aiErr);
+          summary = `### AI 요약 실패\n\nAI 분석 중 오류가 발생했습니다: ${aiErr.message || '알 수 없는 오류'}`;
+          geminiModel = selectedModel;
           await checkAndRotateGeminiKeyIfNeeded(aiErr.message || String(aiErr));
         }
       }
