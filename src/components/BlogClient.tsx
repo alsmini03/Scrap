@@ -21,7 +21,10 @@ export default function BlogClient({
   initialSavedBlogs?: any[];
 }) {
   const [recommendPosts, setRecommendPosts] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [addingUrl, setAddingUrl] = useState<string | null>(null);
   const [savedUrls, setSavedUrls] = useState<Set<string>>(new Set(initialSavedBlogs.map(b => b.url)));
   const [savedBlogs, setSavedBlogs] = useState<any[]>(initialSavedBlogs);
@@ -66,34 +69,77 @@ export default function BlogClient({
     localStorage.setItem('blog_view_mode', viewMode);
   }, [viewMode]);
 
-  const fetchRecommend = async () => {
+  const fetchRecommend = async (pageNum = 1) => {
     if (!activeTabId) {
       setRecommendPosts([]);
       setIsLoading(false);
+      setHasMore(false);
       return;
     }
 
-    setIsLoading(true);
+    if (pageNum > 1) {
+      setIsLoadingMore(true);
+    } else {
+      setIsLoading(true);
+      setPage(1);
+    }
+
     try {
-      let fetchUrl = '/api/blog/list';
+      let fetchUrl = `/api/blog/list?page=${pageNum}`;
       const activeTab = tabs.find(t => t.id === activeTabId);
       if (activeTab) {
-        fetchUrl += `?blogId=${encodeURIComponent(activeTab.url)}`;
+        fetchUrl += `&blogId=${encodeURIComponent(activeTab.url)}`;
       } else {
           setRecommendPosts([]);
           setIsLoading(false);
+          setHasMore(false);
           return;
       }
 
       const res = await fetch(fetchUrl);
       const data = await res.json();
-      setRecommendPosts(data.posts || []);
+      const newPosts = data.posts || [];
+
+      if (pageNum > 1) {
+        setRecommendPosts(prev => {
+          const existingUrls = new Set(prev.map(p => p.url));
+          const uniqueNew = newPosts.filter((p: any) => !existingUrls.has(p.url));
+          return [...prev, ...uniqueNew];
+        });
+      } else {
+        setRecommendPosts(newPosts);
+      }
+
+      if (newPosts.length === 0) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
     } catch (err) {
       console.error(err);
+      if (pageNum === 1) setRecommendPosts([]);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
   };
+
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!loadMoreRef.current || isLoading || isLoadingMore || !hasMore || viewMode !== 'recommend') return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+        const nextPage = page + 1;
+        setPage(nextPage);
+        fetchRecommend(nextPage);
+      }
+    }, { threshold: 0.1 });
+
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [loadMoreRef.current, isLoading, isLoadingMore, hasMore, page, viewMode]);
 
   useEffect(() => {
     const savedTab = localStorage.getItem('blog_recommend_tab');
@@ -551,21 +597,33 @@ export default function BlogClient({
                   ))}
                 </div>
             ) : (
-                <div className="space-y-3 select-none">
-                    {recommendPosts.map((post, idx) => (
-                        <RecommendItem
-                          key={idx}
-                          post={post}
-                          addingUrl={addingUrl}
-                          isSaved={savedUrls.has(post.url)}
-                          isEditMode={isEditMode}
-                          isSelected={selectedUrls.includes(post.url)}
-                          onAdd={handleAddBlog}
-                          onToggleSelect={toggleSelect}
-                          onPointerDown={handlePointerDown}
-                        />
-                    ))}
-                </div>
+                <>
+                  <div className="space-y-3 select-none">
+                      {recommendPosts.map((post, idx) => (
+                          <RecommendItem
+                            key={idx}
+                            post={post}
+                            addingUrl={addingUrl}
+                            isSaved={savedUrls.has(post.url)}
+                            isEditMode={isEditMode}
+                            isSelected={selectedUrls.includes(post.url)}
+                            onAdd={handleAddBlog}
+                            onToggleSelect={toggleSelect}
+                            onPointerDown={handlePointerDown}
+                          />
+                      ))}
+                  </div>
+
+                  {/* Infinite Scroll Sentinel */}
+                  <div ref={loadMoreRef} className="py-6 flex justify-center items-center">
+                    {isLoadingMore && (
+                      <div className="flex items-center gap-2 text-slate-400 text-xs font-bold">
+                        <div className="size-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        <span>이전 글 더 불러오는 중...</span>
+                      </div>
+                    )}
+                  </div>
+                </>
             )
             }
           </>

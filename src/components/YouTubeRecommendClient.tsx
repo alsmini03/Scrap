@@ -2,7 +2,7 @@
 
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
-import { useEffect, useState, memo } from 'react';
+import { useEffect, useState, memo, useRef } from 'react';
 import { saveYoutubeVideo, getGeminiModels, getGeminiPrompts, addYoutubeTab, deleteYoutubeTab, updateYoutubeTabOrder, addToQueue, sendBatchEmailAction, deleteYoutubeVideo } from '@/lib/db';
 import { cn, getLongPressHandlers } from '@/lib/utils';
 import { showToast } from '@/components/Toast';
@@ -33,7 +33,10 @@ export default function YouTubeRecommendClient({
   initialSavedVideos?: any[];
 }) {
   const [videos, setVideos] = useState<RecommendedVideo[]>([]);
+  const [nextContinuation, setNextContinuation] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [savedUrls, setSavedUrls] = useState<Set<string>>(new Set(initialSavedVideos.map(v => v.url)));
   const [savedVideos, setSavedVideos] = useState<any[]>(initialSavedVideos);
@@ -91,34 +94,60 @@ export default function YouTubeRecommendClient({
     localStorage.setItem('youtube_grid_cols', gridCols.toString());
   }, [gridCols]);
 
-  const fetchVideos = async () => {
+  const fetchVideos = async (continuationToken?: string | null) => {
     if (!activeTabId) {
       setVideos([]);
       setIsLoading(false);
+      setHasMore(false);
       return;
     }
 
-    setIsLoading(true);
+    if (continuationToken) {
+      setIsLoadingMore(true);
+    } else {
+      setIsLoading(true);
+      setNextContinuation(null);
+    }
+
     try {
       let fetchUrl = '/api/youtube/recommend';
       const activeTab = tabs.find(t => t.id === activeTabId);
       if (activeTab) {
         fetchUrl += `?url=${encodeURIComponent(activeTab.url)}`;
+        if (continuationToken) {
+          fetchUrl += `&continuation=${encodeURIComponent(continuationToken)}`;
+        }
       } else {
         setVideos([]);
         setIsLoading(false);
+        setHasMore(false);
         return;
       }
 
       const res = await fetch(fetchUrl);
       const data = await res.json();
 
-      setVideos(data.videos || []);
+      const newVideos = data.videos || [];
+      if (continuationToken) {
+        setVideos(prev => {
+          const existingIds = new Set(prev.map(v => v.videoId));
+          const uniqueNew = newVideos.filter((v: RecommendedVideo) => !existingIds.has(v.videoId));
+          return [...prev, ...uniqueNew];
+        });
+      } else {
+        setVideos(newVideos);
+      }
+
+      setNextContinuation(data.nextContinuation || null);
+      setHasMore(!!data.nextContinuation);
     } catch (err) {
       console.error(err);
-      setVideos([]);
+      if (!continuationToken) {
+        setVideos([]);
+      }
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
   };
 
@@ -127,6 +156,21 @@ export default function YouTubeRecommendClient({
         fetchVideos();
     }
   }, [activeTabId, tabs]);
+
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!loadMoreRef.current || isLoading || isLoadingMore || !hasMore || !nextContinuation || viewMode !== 'recommend') return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && hasMore && !isLoadingMore && nextContinuation) {
+        fetchVideos(nextContinuation);
+      }
+    }, { threshold: 0.1 });
+
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [loadMoreRef.current, isLoading, isLoadingMore, hasMore, nextContinuation, viewMode]);
 
   const handleCopyUrl = (url: string) => {
     navigator.clipboard.writeText(url).then(() => {
@@ -369,20 +413,32 @@ export default function YouTubeRecommendClient({
             <p>추천 영상 정보를 불러올 수 없습니다.</p>
           </div>
         ) : (
-          <div className={cn("grid gap-4", gridCols === 1 ? "grid-cols-1" : "grid-cols-2")}>
-            {videos.map((video) => (
-              <RecommendVideoItem
-                key={video.videoId}
-                video={video}
-                cols={gridCols}
-                isLoggedIn={!!session}
-                addingId={addingId}
-                isSaved={savedUrls.has(video.url)}
-                onCopyUrl={handleCopyUrl}
-                onAdd={handleAddVideo}
-              />
-            ))}
-          </div>
+          <>
+            <div className={cn("grid gap-4", gridCols === 1 ? "grid-cols-1" : "grid-cols-2")}>
+              {videos.map((video) => (
+                <RecommendVideoItem
+                  key={video.videoId}
+                  video={video}
+                  cols={gridCols}
+                  isLoggedIn={!!session}
+                  addingId={addingId}
+                  isSaved={savedUrls.has(video.url)}
+                  onCopyUrl={handleCopyUrl}
+                  onAdd={handleAddVideo}
+                />
+              ))}
+            </div>
+
+            {/* Infinite Scroll Sentinel & Spinner */}
+            <div ref={loadMoreRef} className="py-6 flex justify-center items-center">
+              {isLoadingMore && (
+                <div className="flex items-center gap-2 text-slate-400 text-xs font-bold">
+                  <div className="size-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  <span>이전 영상 더 불러오는 중...</span>
+                </div>
+              )}
+            </div>
+          </>
         )}
         </>
         ) : (
