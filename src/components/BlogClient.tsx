@@ -684,14 +684,6 @@ export default function BlogClient({
                           <h3 className="font-bold text-slate-900 dark:text-slate-100 line-clamp-2 leading-tight mb-2 flex-1">
                             {blog.title}
                           </h3>
-                          {isEditMode && (
-                            <div className={cn(
-                              "size-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 mt-0.5",
-                              isSelected ? "bg-primary border-primary text-white" : "border-slate-300 text-transparent"
-                            )}>
-                              <span className="material-symbols-outlined text-[12px] font-bold">check</span>
-                            </div>
-                          )}
                         </div>
                         <div className="flex justify-between items-center text-[10px] text-slate-400">
                           <span className="text-primary font-bold">{blog.author}</span>
@@ -890,31 +882,30 @@ const RecommendItem = memo(({ post, addingUrl, isSaved, isEditMode, isSelected, 
               </div>
           </div>
       </a>
-      {isEditMode ? (
-          <div className={cn(
-              "size-6 rounded-full border-2 flex items-center justify-center transition-all mr-1",
-              isSelected ? "bg-primary border-primary" : "border-slate-200 dark:border-slate-700"
-          )}>
-              {isSelected && <span className="material-symbols-outlined text-white text-[14px] font-bold">check</span>}
-          </div>
-      ) : (
-        <button
-            onClick={() => { if (!isSaved) onAdd(post); }}
-            disabled={addingUrl === post.url || isSaved}
-            className={cn(
-                "size-10 flex-shrink-0 rounded-xl flex items-center justify-center transition-all disabled:opacity-50",
-                isSaved
-                    ? "bg-slate-100 dark:bg-slate-800 text-slate-400"
-                    : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
-            )}
-            title={isSaved ? "이미 저장됨" : "내 서재에 추가"}
-        >
-            {addingUrl === post.url ? (
-                <div className="size-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            ) : (
-                <span className="material-symbols-outlined">{isSaved ? 'task_alt' : 'library_add'}</span>
-            )}
-        </button>
-      )}
+      <button
+          onClick={(e) => {
+            if (isEditMode) {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleSelect(post.url);
+            } else if (!isSaved) {
+              onAdd(post);
+            }
+          }}
+          disabled={!isEditMode && (addingUrl === post.url || isSaved)}
+          className={cn(
+              "size-10 flex-shrink-0 rounded-xl flex items-center justify-center transition-all disabled:opacity-50",
+              isSaved
+                  ? "bg-slate-100 dark:bg-slate-800 text-slate-400"
+                  : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
+          )}
+          title={isSaved ? "이미 저장됨" : "내 서재에 추가"}
+      >
+          {addingUrl === post.url ? (
+              <div className="size-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          ) : (
+              <span className="material-symbols-outlined">{isSaved ? 'task_alt' : 'library_add'}</span>
+          )}
+      </button>
   </div>
 ));
