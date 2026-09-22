@@ -87,6 +87,10 @@ async function uploadToGeminiFiles(apiKey: string, buffer: Buffer, mimeType: str
 }
 
 export async function extractReport(url: string, apiKey: string, modelName?: string, promptText?: string, skipAi: boolean = false) {
+    if (!url) {
+        throw new Error("리포트 파일 URL이 전달되지 않았습니다.");
+    }
+
     const genAI = new GoogleGenerativeAI(apiKey || "");
     // 1. Fetch the PDF
     const response = await fetch(url, {
@@ -149,6 +153,10 @@ export async function extractReport(url: string, apiKey: string, modelName?: str
 }
 
 export async function extractYoutube(url: string, apiKey: string, requestedModel?: string, requestedPrompt?: string, skipAi: boolean = false) {
+    if (!url) {
+        throw new Error("유튜브 동영상 URL이 전달되지 않았습니다.");
+    }
+
     const genAI = new GoogleGenerativeAI(apiKey || "");
     // First attempt with a browser user agent
     let response = await fetch(url, {
