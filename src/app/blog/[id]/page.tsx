@@ -283,13 +283,6 @@ export default function BlogDetailPage() {
               </div>
               <div className="flex items-center gap-1.5">
                 <button
-                  onClick={() => setIsGeminiModalOpen(true)}
-                  className="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors"
-                  title="Gemini 설정 변경"
-                >
-                  <span className="material-symbols-outlined text-lg">settings_suggest</span>
-                </button>
-                <button
                   onClick={handleRegenerateAi}
                   disabled={isAiRunning}
                   className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-primary/10 active:scale-95 transition-all disabled:opacity-50"

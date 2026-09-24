@@ -562,13 +562,6 @@ export default function YoutubeDetailPage() {
                             {video.gemini_model}
                         </span>
                     )}
-                    <button
-                        onClick={() => setIsGeminiModalOpen(true)}
-                        className="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors"
-                        title="Gemini 설정 변경"
-                    >
-                        <span className="material-symbols-outlined text-lg">settings_suggest</span>
-                    </button>
                 </div>
             </div>
 
