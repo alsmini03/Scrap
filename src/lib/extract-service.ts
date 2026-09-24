@@ -87,6 +87,10 @@ async function uploadToGeminiFiles(apiKey: string, buffer: Buffer, mimeType: str
 }
 
 export async function extractReport(url: string, apiKey: string, modelName?: string, promptText?: string, skipAi: boolean = false) {
+    if (!url) {
+        throw new Error("리포트 파일 URL이 전달되지 않았습니다.");
+    }
+
     const genAI = new GoogleGenerativeAI(apiKey || "");
     // 1. Fetch the PDF
     const response = await fetch(url, {
@@ -149,6 +153,10 @@ export async function extractReport(url: string, apiKey: string, modelName?: str
 }
 
 export async function extractYoutube(url: string, apiKey: string, requestedModel?: string, requestedPrompt?: string, skipAi: boolean = false) {
+    if (!url) {
+        throw new Error("유튜브 동영상 URL이 전달되지 않았습니다.");
+    }
+
     const genAI = new GoogleGenerativeAI(apiKey || "");
     // First attempt with a browser user agent
     let response = await fetch(url, {
@@ -343,13 +351,70 @@ export async function extractBlogSummary(blogContent: string, apiKey: string, mo
     const geminiModel = modelName || "gemini-1.5-flash";
     const userPrompt = promptText || "이 블로그 내용을 핵심 위주로 요약하고 분석해 주세요.";
 
-    // Clean HTML tags to plain text for prompt processing
     const $ = cheerio.load(blogContent || "");
-    const cleanText = $.text().trim() || blogContent;
 
-    const fullPrompt = `${userPrompt}\n\n[블로그 글 내용]\n${cleanText.slice(0, 30000)}`;
+    // Extract image URLs from content
+    const imageUrls: string[] = [];
+    $('img').each((_, el) => {
+        let src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src');
+        if (src) {
+            if (src.startsWith('//')) src = 'https:' + src;
+            // Ignore stickers, emoticons, small badges, and avatar images
+            const isSticker = src.includes('sticker') || src.includes('emoticon') || src.includes('profile') || src.includes('static.naver.net');
+            if (!isSticker) {
+                imageUrls.push(src);
+            }
+        }
+    });
 
+    // Extract text from up to 5 main images using Gemini OCR
+    const extractedImageTexts: string[] = [];
     const model = genAI.getGenerativeModel({ model: geminiModel });
+
+    const targetImages = imageUrls.slice(0, 5);
+    for (let i = 0; i < targetImages.length; i++) {
+        const imgUrl = targetImages[i];
+        try {
+            const imgRes = await fetch(imgUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': 'https://m.blog.naver.com/'
+                }
+            });
+            if (imgRes.ok) {
+                const mimeType = imgRes.headers.get('content-type') || 'image/jpeg';
+                const arrayBuffer = await imgRes.arrayBuffer();
+                const base64Data = Buffer.from(arrayBuffer).toString('base64');
+
+                const ocrResult = await model.generateContent([
+                    "이 이미지에 있는 텍스트 및 핵심 내용(표, 차트, 안내문 등)을 한국어로 정확하게 추출해 주세요. 텍스트가 없다면 '없음'이라고 답해 주세요.",
+                    {
+                        inlineData: {
+                            data: base64Data,
+                            mimeType: mimeType.split(';')[0]
+                        }
+                    }
+                ]);
+
+                const ocrText = ocrResult.response.text().trim();
+                if (ocrText && ocrText !== '없음' && !ocrText.includes('텍스트가 없')) {
+                    extractedImageTexts.push(`[이미지 ${i + 1} 추출 텍스트]:\n${ocrText}`);
+                }
+            }
+        } catch (e) {
+            console.warn(`Failed to process OCR for image ${imgUrl}:`, e);
+        }
+    }
+
+    const cleanText = $.text().trim() || blogContent;
+    let fullPrompt = `${userPrompt}\n\n`;
+
+    if (extractedImageTexts.length > 0) {
+        fullPrompt += `[블로그 본문 이미지에서 추출한 텍스트]\n${extractedImageTexts.join('\n\n')}\n\n`;
+    }
+
+    fullPrompt += `[블로그 글 내용]\n${cleanText.slice(0, 30000)}`;
+
     const result = await model.generateContent([{ text: fullPrompt }]);
     return result.response.text();
 }

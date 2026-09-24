@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import he from 'he';
 
-export async function getBlogPosts(idOrUrl: string, limit = 0) {
+export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
     let blogId = idOrUrl;
     let categoryNo = "";
     let isTistory = idOrUrl.includes("tistory.com");
@@ -25,63 +25,98 @@ export async function getBlogPosts(idOrUrl: string, limit = 0) {
 
     let allPosts: any[] = [];
 
-    // RSS approach
-    if (isTistory && idOrUrl.includes('/category/')) {
-        // Tistory Category: skip to scraping
-    } else {
-        let rssUrl = isTistory ? `https://${blogId}.tistory.com/rss` : `https://rss.blog.naver.com/${blogId}.xml`;
-        if (!isTistory && categoryNo) {
-            rssUrl += `?categoryNo=${categoryNo}`;
-        }
-
+    // Naver Blog pagination via PostTitleListAsync
+    if (!isTistory && !isBrunch) {
         try {
-            const response = await fetch(rssUrl, { next: { revalidate: 3600 } });
-        if (response.ok) {
-            const xml = await response.text();
-            const $ = cheerio.load(xml, { xmlMode: true });
-            const channelTitle = $("channel > title").first().text().trim();
-
-            const items = $("item").toArray();
-            const itemsToProcess = limit > 0 ? items.slice(0, limit) : items;
-
-            itemsToProcess.forEach((el) => {
-                const title = he.decode($(el).find("title").text().trim());
-                let link = $(el).find("link").text().trim();
-                const description = $(el).find("description").text();
-                const pubDate = $(el).find("pubDate").text();
-
-                const imgMatch = description.match(/<img[^>]+src="([^">]+)"/);
-                const thumbnail = imgMatch ? imgMatch[1] : null;
-
-                if (!isTistory && link.includes("blog.naver.com/")) {
-                    const parts = link.split('/');
-                    const lastPart = parts[parts.length - 1];
-                    const logNo = lastPart.split('?')[0];
-                    if (!isNaN(Number(logNo))) {
-                        link = `https://m.blog.naver.com/${blogId}/${logNo}`;
-                    }
-                } else if (isTistory && !link.includes('/m/')) {
-                    // Convert to mobile link
-                    const url = new URL(link);
-                    link = `${url.origin}/m${url.pathname}`;
-                }
-
-                if (title && link) {
-                    allPosts.push({
-                        title,
-                        author: channelTitle,
-                        url: link,
-                        thumbnail,
-                        published_at: pubDate,
-                        blogId
+            const asyncUrl = `https://blog.naver.com/PostTitleListAsync.naver?blogId=${blogId}&currentPage=${page}&countPerPage=20${categoryNo ? `&categoryNo=${categoryNo}` : ''}`;
+            const asyncRes = await fetch(asyncUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
+            if (asyncRes.ok) {
+                const text = await asyncRes.text();
+                const cleanJson = text.replace(/\\'/g, "'");
+                const data = JSON.parse(cleanJson);
+                const postList = data.postList || [];
+                if (postList.length > 0) {
+                    const blogTitle = data.blog?.blogId || blogId;
+                    postList.forEach((item: any) => {
+                        let decodedTitle = item.titleWithOutEmoji || item.title || "";
+                        try {
+                            decodedTitle = decodeURIComponent(decodedTitle.replace(/\+/g, ' '));
+                        } catch(e) {}
+                        allPosts.push({
+                            title: he.decode(decodedTitle),
+                            author: blogTitle,
+                            url: `https://m.blog.naver.com/${item.blogId || blogId}/${item.logNo}`,
+                            thumbnail: item.thumbnailUrl || null,
+                            published_at: item.addDate,
+                            blogId: item.blogId || blogId
+                        });
                     });
+                    return allPosts;
                 }
-            });
-
-                if (allPosts.length > 0) return allPosts;
             }
         } catch (e) {
-            console.error(`RSS failed for ${blogId}`, e);
+            console.error(`PostTitleListAsync failed for ${blogId}`, e);
+        }
+    }
+
+    // RSS approach (for Page 1 or fallback)
+    if (page === 1) {
+        if (isTistory && idOrUrl.includes('/category/')) {
+            // Tistory Category: skip to scraping
+        } else {
+            let rssUrl = isTistory ? `https://${blogId}.tistory.com/rss` : `https://rss.blog.naver.com/${blogId}.xml`;
+            if (!isTistory && categoryNo) {
+                rssUrl += `?categoryNo=${categoryNo}`;
+            }
+
+            try {
+                const response = await fetch(rssUrl, { next: { revalidate: 3600 } });
+                if (response.ok) {
+                    const xml = await response.text();
+                    const $ = cheerio.load(xml, { xmlMode: true });
+                    const channelTitle = $("channel > title").first().text().trim();
+
+                    const items = $("item").toArray();
+                    const itemsToProcess = limit > 0 ? items.slice(0, limit) : items;
+
+                    itemsToProcess.forEach((el) => {
+                        const title = he.decode($(el).find("title").text().trim());
+                        let link = $(el).find("link").text().trim();
+                        const description = $(el).find("description").text();
+                        const pubDate = $(el).find("pubDate").text();
+
+                        const imgMatch = description.match(/<img[^>]+src="([^">]+)"/);
+                        const thumbnail = imgMatch ? imgMatch[1] : null;
+
+                        if (!isTistory && link.includes("blog.naver.com/")) {
+                            const parts = link.split('/');
+                            const lastPart = parts[parts.length - 1];
+                            const logNo = lastPart.split('?')[0];
+                            if (!isNaN(Number(logNo))) {
+                                link = `https://m.blog.naver.com/${blogId}/${logNo}`;
+                            }
+                        } else if (isTistory && !link.includes('/m/')) {
+                            const url = new URL(link);
+                            link = `${url.origin}/m${url.pathname}`;
+                        }
+
+                        if (title && link) {
+                            allPosts.push({
+                                title,
+                                author: channelTitle,
+                                url: link,
+                                thumbnail,
+                                published_at: pubDate,
+                                blogId
+                            });
+                        }
+                    });
+
+                    if (allPosts.length > 0) return allPosts;
+                }
+            } catch (e) {
+                console.error(`RSS failed for ${blogId}`, e);
+            }
         }
     }
 

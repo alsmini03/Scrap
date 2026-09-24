@@ -7,6 +7,7 @@ import { saveBlog, addBlogTab, deleteBlogTab, updateBlogTabOrder, sendBatchEmail
 import { cn, formatDateToYMD, getLongPressHandlers } from '@/lib/utils';
 import { showToast } from '@/components/Toast';
 import TabManagementModal from '@/components/TabManagementModal';
+import GeminiSettingsModal from '@/components/GeminiSettingsModal';
 import ViewModeToggle from '@/components/ViewModeToggle';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -21,7 +22,10 @@ export default function BlogClient({
   initialSavedBlogs?: any[];
 }) {
   const [recommendPosts, setRecommendPosts] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [addingUrl, setAddingUrl] = useState<string | null>(null);
   const [savedUrls, setSavedUrls] = useState<Set<string>>(new Set(initialSavedBlogs.map(b => b.url)));
   const [savedBlogs, setSavedBlogs] = useState<any[]>(initialSavedBlogs);
@@ -33,6 +37,7 @@ export default function BlogClient({
   const [isDragging, setIsDragging] = useState(false);
   const [isEmailing, setIsEmailing] = useState(false);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
+  const [saveProgress, setSaveProgress] = useState<{ current: number; total: number } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const isProcessing = isEmailing || isSavingBatch || isDeleting;
 
@@ -48,6 +53,7 @@ export default function BlogClient({
   const [newTabUrl, setNewTabUrl] = useState('');
   const [isAddingTab, setIsAddingTab] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
   const [isPromptOn, setIsPromptOn] = useState(false);
 
   useEffect(() => {
@@ -66,34 +72,77 @@ export default function BlogClient({
     localStorage.setItem('blog_view_mode', viewMode);
   }, [viewMode]);
 
-  const fetchRecommend = async () => {
+  const fetchRecommend = async (pageNum = 1) => {
     if (!activeTabId) {
       setRecommendPosts([]);
       setIsLoading(false);
+      setHasMore(false);
       return;
     }
 
-    setIsLoading(true);
+    if (pageNum > 1) {
+      setIsLoadingMore(true);
+    } else {
+      setIsLoading(true);
+      setPage(1);
+    }
+
     try {
-      let fetchUrl = '/api/blog/list';
+      let fetchUrl = `/api/blog/list?page=${pageNum}`;
       const activeTab = tabs.find(t => t.id === activeTabId);
       if (activeTab) {
-        fetchUrl += `?blogId=${encodeURIComponent(activeTab.url)}`;
+        fetchUrl += `&blogId=${encodeURIComponent(activeTab.url)}`;
       } else {
           setRecommendPosts([]);
           setIsLoading(false);
+          setHasMore(false);
           return;
       }
 
       const res = await fetch(fetchUrl);
       const data = await res.json();
-      setRecommendPosts(data.posts || []);
+      const newPosts = data.posts || [];
+
+      if (pageNum > 1) {
+        setRecommendPosts(prev => {
+          const existingUrls = new Set(prev.map(p => p.url));
+          const uniqueNew = newPosts.filter((p: any) => !existingUrls.has(p.url));
+          return [...prev, ...uniqueNew];
+        });
+      } else {
+        setRecommendPosts(newPosts);
+      }
+
+      if (newPosts.length === 0) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
     } catch (err) {
       console.error(err);
+      if (pageNum === 1) setRecommendPosts([]);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
   };
+
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!loadMoreRef.current || isLoading || isLoadingMore || !hasMore || viewMode !== 'recommend') return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+        const nextPage = page + 1;
+        setPage(nextPage);
+        fetchRecommend(nextPage);
+      }
+    }, { threshold: 0.1 });
+
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [loadMoreRef.current, isLoading, isLoadingMore, hasMore, page, viewMode]);
 
   useEffect(() => {
     const savedTab = localStorage.getItem('blog_recommend_tab');
@@ -367,9 +416,15 @@ export default function BlogClient({
   const handleBatchSave = async () => {
       if (selectedUrls.length === 0) return;
       setIsSavingBatch(true);
+      const total = selectedUrls.length;
+      setSaveProgress({ current: 0, total });
+
       try {
           let count = 0;
-          for (const url of selectedUrls) {
+          for (let i = 0; i < selectedUrls.length; i++) {
+              const url = selectedUrls[i];
+              setSaveProgress({ current: i + 1, total });
+
               if (savedUrls.has(url)) continue;
               const post = recommendPosts.find(p => p.url === url);
               const res = await fetch('/api/blog/extract', {
@@ -400,6 +455,7 @@ export default function BlogClient({
           showToast('저장 중 오류가 발생했습니다.', 'error');
       } finally {
           setIsSavingBatch(false);
+          setSaveProgress(null);
       }
   };
 
@@ -424,8 +480,16 @@ export default function BlogClient({
             ) : (
                 <div className="flex items-center gap-1">
                     <button
+                        onClick={() => setIsGeminiModalOpen(true)}
+                        className="text-primary p-2"
+                        title="Gemini 설정"
+                    >
+                        <span className="material-symbols-outlined text-2xl">settings_suggest</span>
+                    </button>
+                    <button
                         onClick={() => window.location.href = '/add?tab=blog'}
                         className="text-primary p-2"
+                        title="추가"
                     >
                         <span className="material-symbols-outlined text-2xl">add_circle</span>
                     </button>
@@ -551,21 +615,33 @@ export default function BlogClient({
                   ))}
                 </div>
             ) : (
-                <div className="space-y-3 select-none">
-                    {recommendPosts.map((post, idx) => (
-                        <RecommendItem
-                          key={idx}
-                          post={post}
-                          addingUrl={addingUrl}
-                          isSaved={savedUrls.has(post.url)}
-                          isEditMode={isEditMode}
-                          isSelected={selectedUrls.includes(post.url)}
-                          onAdd={handleAddBlog}
-                          onToggleSelect={toggleSelect}
-                          onPointerDown={handlePointerDown}
-                        />
-                    ))}
-                </div>
+                <>
+                  <div className="space-y-3 select-none">
+                      {recommendPosts.map((post, idx) => (
+                          <RecommendItem
+                            key={idx}
+                            post={post}
+                            addingUrl={addingUrl}
+                            isSaved={savedUrls.has(post.url)}
+                            isEditMode={isEditMode}
+                            isSelected={selectedUrls.includes(post.url)}
+                            onAdd={handleAddBlog}
+                            onToggleSelect={toggleSelect}
+                            onPointerDown={handlePointerDown}
+                          />
+                      ))}
+                  </div>
+
+                  {/* Infinite Scroll Sentinel */}
+                  <div ref={loadMoreRef} className="py-6 flex justify-center items-center">
+                    {isLoadingMore && (
+                      <div className="flex items-center gap-2 text-slate-400 text-xs font-bold">
+                        <div className="size-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        <span>이전 글 더 불러오는 중...</span>
+                      </div>
+                    )}
+                  </div>
+                </>
             )
             }
           </>
@@ -626,14 +702,6 @@ export default function BlogClient({
                           <h3 className="font-bold text-slate-900 dark:text-slate-100 line-clamp-2 leading-tight mb-2 flex-1">
                             {blog.title}
                           </h3>
-                          {isEditMode && (
-                            <div className={cn(
-                              "size-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 mt-0.5",
-                              isSelected ? "bg-primary border-primary text-white" : "border-slate-300 text-transparent"
-                            )}>
-                              <span className="material-symbols-outlined text-[12px] font-bold">check</span>
-                            </div>
-                          )}
                         </div>
                         <div className="flex justify-between items-center text-[10px] text-slate-400">
                           <span className="text-primary font-bold">{blog.author}</span>
@@ -681,10 +749,13 @@ export default function BlogClient({
                 <button
                   onClick={handleBatchSave}
                   disabled={selectedUrls.length === 0 || isProcessing}
-                  className="px-4 py-2 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 text-xs"
+                  className="px-4 py-2 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 text-xs shrink-0"
                 >
                   {isSavingBatch ? (
-                    <div className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="flex items-center gap-1.5">
+                      <div className="size-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>{saveProgress ? `${saveProgress.current}/${saveProgress.total}` : '저장 중...'}</span>
+                    </div>
                   ) : (
                     <>
                       <span className="material-symbols-outlined text-sm">bookmark</span>
@@ -773,6 +844,12 @@ export default function BlogClient({
 
       <BottomNav activeTab="blog" />
 
+      <GeminiSettingsModal
+        isOpen={isGeminiModalOpen}
+        onClose={() => setIsGeminiModalOpen(false)}
+        category="blog"
+      />
+
       <TabManagementModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -832,31 +909,30 @@ const RecommendItem = memo(({ post, addingUrl, isSaved, isEditMode, isSelected, 
               </div>
           </div>
       </a>
-      {isEditMode ? (
-          <div className={cn(
-              "size-6 rounded-full border-2 flex items-center justify-center transition-all mr-1",
-              isSelected ? "bg-primary border-primary" : "border-slate-200 dark:border-slate-700"
-          )}>
-              {isSelected && <span className="material-symbols-outlined text-white text-[14px] font-bold">check</span>}
-          </div>
-      ) : (
-        <button
-            onClick={() => { if (!isSaved) onAdd(post); }}
-            disabled={addingUrl === post.url || isSaved}
-            className={cn(
-                "size-10 flex-shrink-0 rounded-xl flex items-center justify-center transition-all disabled:opacity-50",
-                isSaved
-                    ? "bg-slate-100 dark:bg-slate-800 text-slate-400"
-                    : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
-            )}
-            title={isSaved ? "이미 저장됨" : "내 서재에 추가"}
-        >
-            {addingUrl === post.url ? (
-                <div className="size-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            ) : (
-                <span className="material-symbols-outlined">{isSaved ? 'task_alt' : 'library_add'}</span>
-            )}
-        </button>
-      )}
+      <button
+          onClick={(e) => {
+            if (isEditMode) {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleSelect(post.url);
+            } else if (!isSaved) {
+              onAdd(post);
+            }
+          }}
+          disabled={!isEditMode && (addingUrl === post.url || isSaved)}
+          className={cn(
+              "size-10 flex-shrink-0 rounded-xl flex items-center justify-center transition-all disabled:opacity-50",
+              isSaved
+                  ? "bg-slate-100 dark:bg-slate-800 text-slate-400"
+                  : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
+          )}
+          title={isSaved ? "이미 저장됨" : "내 서재에 추가"}
+      >
+          {addingUrl === post.url ? (
+              <div className="size-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          ) : (
+              <span className="material-symbols-outlined">{isSaved ? 'task_alt' : 'library_add'}</span>
+          )}
+      </button>
   </div>
 ));

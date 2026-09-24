@@ -8,10 +8,11 @@ import { useEffect, useState } from 'react';
 import { cn, formatDateToYMD, isThumbnailInContent } from '@/lib/utils';
 import { showToast } from '@/components/Toast';
 import { marked } from 'marked';
+import GeminiSettingsModal from '@/components/GeminiSettingsModal';
 
 const SkeletonBlogDetail = () => (
   <div className="font-display min-h-screen pb-24 bg-white dark:bg-background-dark text-slate-900 dark:text-slate-100">
-    <Header title="블로그 글" showBack onBack={() => {}} />
+    <Header title="블로그 (저장)" showBack onBack={() => {}} />
     <main className="p-4 space-y-6 max-w-2xl mx-auto">
       <div className="flex justify-between items-center bg-white dark:bg-slate-900/50 rounded-xl p-2 border border-slate-100 dark:border-primary/10 shadow-sm">
         <div className="h-8 w-20 bg-slate-100 dark:bg-slate-800 rounded animate-skeleton" />
@@ -48,6 +49,7 @@ export default function BlogDetailPage() {
   const [isSending, setIsSending] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
   const [isAiRunning, setIsAiRunning] = useState(false);
+  const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
 
   // Navigation states
   const [adjacentIds, setAdjacentIds] = useState<{ prevId?: string; prevTitle?: string; nextId?: string; nextTitle?: string }>({});
@@ -151,13 +153,25 @@ export default function BlogDetailPage() {
   return (
     <div className="font-display min-h-screen pb-24 bg-white dark:bg-background-dark text-slate-900 dark:text-slate-100 overflow-x-hidden">
       <Header
-        title="블로그 글"
         onBack={() => router.push('/saved?filter=blog')}
         showBack
         rightAction={
             <button onClick={handleDelete} className="text-red-500 p-2" title="삭제"><span className="material-symbols-outlined">delete</span></button>
         }
-      />
+      >
+        <div className="flex items-center justify-center gap-1.5 min-w-0">
+          <h1 className="text-xl font-bold leading-tight tracking-tight text-center truncate text-slate-900 dark:text-slate-100">
+            블로그 (저장)
+          </h1>
+          <button
+            onClick={() => setIsGeminiModalOpen(true)}
+            className="p-1 rounded-full text-primary hover:bg-primary/10 transition-colors shrink-0"
+            title="Gemini 설정"
+          >
+            <span className="material-symbols-outlined text-xl">settings_suggest</span>
+          </button>
+        </div>
+      </Header>
 
       <main className="p-4 space-y-6 max-w-2xl mx-auto">
         {/* Navigation Bar */}
@@ -267,14 +281,16 @@ export default function BlogDetailPage() {
                   </span>
                 )}
               </div>
-              <button
-                onClick={handleRegenerateAi}
-                disabled={isAiRunning}
-                className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-primary/10 active:scale-95 transition-all disabled:opacity-50"
-              >
-                <span className={cn("material-symbols-outlined text-[13px]", isAiRunning && "animate-spin")}>refresh</span>
-                다시 가져오기
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleRegenerateAi}
+                  disabled={isAiRunning}
+                  className="p-1 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-primary/10 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center"
+                  title="AI 요약 다시 가져오기"
+                >
+                  <span className={cn("material-symbols-outlined text-[16px]", isAiRunning && "animate-spin")}>refresh</span>
+                </button>
+              </div>
             </div>
             <div
               className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-300"
@@ -305,6 +321,12 @@ export default function BlogDetailPage() {
       </main>
 
       <BottomNav activeTab="blog" />
+
+      <GeminiSettingsModal
+        isOpen={isGeminiModalOpen}
+        onClose={() => setIsGeminiModalOpen(false)}
+        category="blog"
+      />
     </div>
   );
 }

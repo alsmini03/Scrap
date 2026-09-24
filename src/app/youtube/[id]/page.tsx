@@ -17,6 +17,7 @@ import {
 } from '@/lib/db';
 import { notFound, useRouter, useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
+import GeminiSettingsModal from '@/components/GeminiSettingsModal';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw';
@@ -42,7 +43,7 @@ interface YoutubeVideo {
 
 const SkeletonYoutubeDetail = () => (
   <div className="font-display min-h-screen pb-24 bg-background-light dark:bg-background-dark overflow-x-hidden">
-    <Header title="유튜브 기록" showBack onBack={() => {}} />
+    <Header title="유튜브 (저장)" showBack onBack={() => {}} />
     <main className="p-4 space-y-6">
       <div className="flex justify-between items-center bg-white dark:bg-slate-900/50 rounded-xl p-2 border border-slate-100 dark:border-primary/10 shadow-sm">
         <div className="h-8 w-20 bg-slate-100 dark:bg-slate-800 rounded animate-skeleton" />
@@ -79,6 +80,7 @@ export default function YoutubeDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
   const [isRefetching, setIsRefetching] = useState(false);
+  const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState('seokmin.kwon@samsung.com');
@@ -371,7 +373,6 @@ export default function YoutubeDetailPage() {
   return (
     <div className="font-display min-h-screen pb-24 bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 overflow-x-hidden">
       <Header
-        title="유튜브 기록"
         onBack={() => router.push('/saved?filter=youtube')}
         showBack
         rightAction={
@@ -427,7 +428,20 @@ export default function YoutubeDetailPage() {
             )}
           </div>
         }
-      />
+      >
+        <div className="flex items-center justify-center gap-1.5 min-w-0">
+          <h1 className="text-xl font-bold leading-tight tracking-tight text-center truncate text-slate-900 dark:text-slate-100">
+            유튜브 (저장)
+          </h1>
+          <button
+            onClick={() => setIsGeminiModalOpen(true)}
+            className="p-1 rounded-full text-primary hover:bg-primary/10 transition-colors shrink-0"
+            title="Gemini 설정"
+          >
+            <span className="material-symbols-outlined text-xl">settings_suggest</span>
+          </button>
+        </div>
+      </Header>
 
       <main className="p-4 space-y-6">
         {/* Navigation Bar */}
@@ -542,11 +556,13 @@ export default function YoutubeDetailPage() {
                    <span className="material-symbols-outlined text-primary">auto_awesome</span>
                    AI 요약 분석
                 </h2>
-                {video.summary && video.gemini_model && (
-                    <span className="text-[10px] font-black px-2 py-0.5 bg-primary/10 text-primary rounded-md uppercase tracking-tighter">
-                        {video.gemini_model}
-                    </span>
-                )}
+                <div className="flex items-center gap-2">
+                    {video.summary && video.gemini_model && (
+                        <span className="text-[10px] font-black px-2 py-0.5 bg-primary/10 text-primary rounded-md uppercase tracking-tighter">
+                            {video.gemini_model}
+                        </span>
+                    )}
+                </div>
             </div>
 
             {/* AI Status Section */}
@@ -614,9 +630,10 @@ export default function YoutubeDetailPage() {
                                 <button
                                     onClick={handleRetrySummary}
                                     disabled={isRefetching}
-                                    className="w-full py-2.5 bg-red-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all disabled:opacity-50"
+                                    className="w-full py-2.5 bg-red-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                                    title="AI 요약 다시 가져오기"
                                 >
-                                    다시 가져오기
+                                    <span className={cn("material-symbols-outlined text-sm", isRefetching && "animate-spin")}>refresh</span>
                                 </button>
                             </div>
                         );
@@ -690,6 +707,12 @@ export default function YoutubeDetailPage() {
       </main>
 
       <BottomNav activeTab="library" />
+
+      <GeminiSettingsModal
+        isOpen={isGeminiModalOpen}
+        onClose={() => setIsGeminiModalOpen(false)}
+        category="youtube"
+      />
     </div>
   );
 }

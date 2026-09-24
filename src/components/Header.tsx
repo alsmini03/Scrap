@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
 interface HeaderProps {
-  title: string;
+  title?: string;
   showBack?: boolean;
   onBack?: () => void;
   rightAction?: React.ReactNode;

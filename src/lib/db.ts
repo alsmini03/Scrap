@@ -552,8 +552,25 @@ export async function processQueueItemManuallyAction(id: string) {
         throw new Error(`사용 가능한 제미나이 API 키(${keyIndex}번)가 설정되지 않았습니다.`);
     }
 
+    let payload = typeof item.payload === 'string' ? JSON.parse(item.payload) : (item.payload || {});
+
+    // Recover URL if missing from payload
+    if (!payload.url) {
+      if (item.type === 'report') {
+        const report = await getReportById(item.target_id);
+        if (report?.url) payload.url = report.url;
+      } else {
+        const ytRes = await query("SELECT url FROM youtube_videos WHERE id = $1", [item.target_id]);
+        if (ytRes.rows[0]?.url) payload.url = ytRes.rows[0].url;
+      }
+    }
+
+    if (!payload.url) {
+      throw new Error("작업 대상 URL 정보를 찾을 수 없습니다.");
+    }
+
     // Mark as processing and update payload with latest settings
-    const newPayload = { ...item.payload, model: activeModel, prompt: activePrompt };
+    const newPayload = { ...payload, model: activeModel, prompt: activePrompt };
     await query(
       "UPDATE gemini_queue SET status = 'processing', last_processed_at = CURRENT_TIMESTAMP, payload = $1 WHERE id = $2",
       [JSON.stringify(newPayload), item.id]
@@ -561,14 +578,14 @@ export async function processQueueItemManuallyAction(id: string) {
 
     let result;
     try {
-      const { type, target_id, payload } = item;
+      const { type, target_id } = item;
       let summary = '';
 
       if (type === 'youtube') {
-          const data = await extractYoutube(payload.url, activeKey, activeModel, activePrompt);
+          const data = await extractYoutube(newPayload.url, activeKey, activeModel, activePrompt);
           summary = data.summary;
       } else {
-          summary = await extractReport(payload.url, activeKey, activeModel, activePrompt);
+          summary = await extractReport(newPayload.url, activeKey, activeModel, activePrompt);
       }
 
       // Check for rotation in successful summary text
@@ -2129,7 +2146,24 @@ export async function processNextQueueItemAction() {
       activePrompt = prompts.find(p => p.youtube_default)?.content || prompts[0]?.content;
     }
 
-    const updatedPayload = { ...item.payload, model: activeModel, prompt: activePrompt };
+    let payload = typeof item.payload === 'string' ? JSON.parse(item.payload) : (item.payload || {});
+
+    // Recover URL if missing from payload
+    if (!payload.url) {
+      if (item.type === 'report') {
+        const report = await getReportById(item.target_id);
+        if (report?.url) payload.url = report.url;
+      } else {
+        const ytRes = await query("SELECT url FROM youtube_videos WHERE id = $1", [item.target_id]);
+        if (ytRes.rows[0]?.url) payload.url = ytRes.rows[0].url;
+      }
+    }
+
+    if (!payload.url) {
+      throw new Error("작업 대상 URL 정보를 찾을 수 없습니다.");
+    }
+
+    const updatedPayload = { ...payload, model: activeModel, prompt: activePrompt };
 
     // Mark as processing with refreshed payload
     await query(
@@ -2139,14 +2173,14 @@ export async function processNextQueueItemAction() {
 
     let result;
     try {
-      const { type, target_id, payload } = item;
+      const { type, target_id } = item;
       let summary = '';
 
       if (type === 'youtube') {
-          const data = await extractYoutube(payload.url, activeKey, activeModel, activePrompt);
+          const data = await extractYoutube(updatedPayload.url, activeKey, activeModel, activePrompt);
           summary = data.summary;
       } else {
-          summary = await extractReport(payload.url, activeKey, activeModel, activePrompt);
+          summary = await extractReport(updatedPayload.url, activeKey, activeModel, activePrompt);
       }
 
       // Check for rotation in successful summary text
@@ -2226,13 +2260,28 @@ export async function retryGeminiTaskAction(type: 'youtube' | 'report', targetId
 
     // Check if task exists in queue
     const taskRes = await query(
-      "SELECT id FROM gemini_queue WHERE (user_id = $1 OR user_id = $2) AND type = $3 AND target_id = $4",
+      "SELECT * FROM gemini_queue WHERE (user_id = $1 OR user_id = $2) AND type = $3 AND target_id = $4",
       [user.id, user.email, type, targetId]
     );
 
     if (taskRes.rows.length > 0) {
       const existingTask = taskRes.rows[0];
-      const updatedPayload = { ...existingTask.payload, model: activeModel, prompt: activePrompt };
+      let existingPayload = typeof existingTask.payload === 'string'
+        ? JSON.parse(existingTask.payload)
+        : (existingTask.payload || {});
+
+      // Recover URL from target record if missing from payload
+      if (!existingPayload.url) {
+        if (type === 'report') {
+          const report = await getReportById(targetId);
+          if (report?.url) existingPayload.url = report.url;
+        } else {
+          const ytRes = await query("SELECT url FROM youtube_videos WHERE id = $1", [targetId]);
+          if (ytRes.rows[0]?.url) existingPayload.url = ytRes.rows[0].url;
+        }
+      }
+
+      const updatedPayload = { ...existingPayload, model: activeModel, prompt: activePrompt };
 
       // Reset existing task with updated model and prompt
       await query(
