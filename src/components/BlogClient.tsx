@@ -7,6 +7,7 @@ import { saveBlog, addBlogTab, deleteBlogTab, updateBlogTabOrder, sendBatchEmail
 import { cn, formatDateToYMD, getLongPressHandlers } from '@/lib/utils';
 import { showToast } from '@/components/Toast';
 import TabManagementModal from '@/components/TabManagementModal';
+import GeminiSettingsModal from '@/components/GeminiSettingsModal';
 import ViewModeToggle from '@/components/ViewModeToggle';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -52,6 +53,7 @@ export default function BlogClient({
   const [newTabUrl, setNewTabUrl] = useState('');
   const [isAddingTab, setIsAddingTab] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
   const [isPromptOn, setIsPromptOn] = useState(false);
 
   useEffect(() => {
@@ -478,8 +480,16 @@ export default function BlogClient({
             ) : (
                 <div className="flex items-center gap-1">
                     <button
+                        onClick={() => setIsGeminiModalOpen(true)}
+                        className="text-primary p-2"
+                        title="Gemini 설정"
+                    >
+                        <span className="material-symbols-outlined text-2xl">settings_suggest</span>
+                    </button>
+                    <button
                         onClick={() => window.location.href = '/add?tab=blog'}
                         className="text-primary p-2"
+                        title="추가"
                     >
                         <span className="material-symbols-outlined text-2xl">add_circle</span>
                     </button>
@@ -833,6 +843,12 @@ export default function BlogClient({
       )}
 
       <BottomNav activeTab="blog" />
+
+      <GeminiSettingsModal
+        isOpen={isGeminiModalOpen}
+        onClose={() => setIsGeminiModalOpen(false)}
+        category="blog"
+      />
 
       <TabManagementModal
         isOpen={isModalOpen}

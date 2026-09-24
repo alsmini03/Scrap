@@ -7,6 +7,7 @@ import { saveYoutubeVideo, getGeminiModels, getGeminiPrompts, addYoutubeTab, del
 import { cn, getLongPressHandlers } from '@/lib/utils';
 import { showToast } from '@/components/Toast';
 import TabManagementModal from '@/components/TabManagementModal';
+import GeminiSettingsModal from '@/components/GeminiSettingsModal';
 import ViewModeToggle from '@/components/ViewModeToggle';
 import YoutubeGrid from '@/components/YoutubeGrid';
 import QueueStatus from '@/components/QueueStatus';
@@ -60,6 +61,7 @@ export default function YouTubeRecommendClient({
   const [newTabUrl, setNewTabUrl] = useState('');
   const [isAddingTab, setIsAddingTab] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
 
   useEffect(() => {
     const savedTab = localStorage.getItem('youtube_recommend_tab_v2');
@@ -298,6 +300,13 @@ export default function YouTubeRecommendClient({
           ) : (
             <div className="flex items-center gap-1">
               <button
+                onClick={() => setIsGeminiModalOpen(true)}
+                className="text-primary p-2"
+                title="Gemini 설정"
+              >
+                <span className="material-symbols-outlined text-2xl">settings_suggest</span>
+              </button>
+              <button
                 onClick={() => {
                   const next = gridCols === 1 ? 2 : 1;
                   setGridCols(next);
@@ -313,6 +322,7 @@ export default function YouTubeRecommendClient({
               <button
                 onClick={() => window.location.href = '/add/youtube'}
                 className="text-primary p-2"
+                title="추가"
               >
                 <span className="material-symbols-outlined text-2xl">add_circle</span>
               </button>
@@ -564,6 +574,12 @@ export default function YouTubeRecommendClient({
       )}
 
       <BottomNav activeTab="youtube" />
+
+      <GeminiSettingsModal
+        isOpen={isGeminiModalOpen}
+        onClose={() => setIsGeminiModalOpen(false)}
+        category="youtube"
+      />
 
       <TabManagementModal
         isOpen={isModalOpen}
