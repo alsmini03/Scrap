@@ -526,7 +526,6 @@ export default function ReportClient({
   return (
     <div className="font-display min-h-screen pb-24 bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 overflow-x-hidden">
       <Header
-        title={isDetailView ? "리포트 상세" : "리포트"}
         showBack={isDetailView}
         onBack={() => {
           if (selectedReportId) {
@@ -548,7 +547,7 @@ export default function ReportClient({
             ) : (
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => window.location.href = '/settings/gemini'}
+                  onClick={() => setIsGeminiModalOpen(true)}
                   className="text-primary p-2"
                   title="Gemini 설정"
                 >
@@ -565,7 +564,20 @@ export default function ReportClient({
           ) : undefined
         }
       >
-        {!isDetailView && (
+        {isDetailView ? (
+          <div className="flex items-center justify-center gap-1.5 min-w-0">
+            <h1 className="text-xl font-bold leading-tight tracking-tight text-center truncate text-slate-900 dark:text-slate-100">
+              리포트 (저장)
+            </h1>
+            <button
+              onClick={() => setIsGeminiModalOpen(true)}
+              className="p-1 rounded-full text-primary hover:bg-primary/10 transition-colors shrink-0"
+              title="Gemini 설정"
+            >
+              <span className="material-symbols-outlined text-xl">settings_suggest</span>
+            </button>
+          </div>
+        ) : (
           <ViewModeToggle
             title="리포트"
             viewMode={viewMode}

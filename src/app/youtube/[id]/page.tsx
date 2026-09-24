@@ -43,7 +43,7 @@ interface YoutubeVideo {
 
 const SkeletonYoutubeDetail = () => (
   <div className="font-display min-h-screen pb-24 bg-background-light dark:bg-background-dark overflow-x-hidden">
-    <Header title="유튜브 기록" showBack onBack={() => {}} />
+    <Header title="유튜브 (저장)" showBack onBack={() => {}} />
     <main className="p-4 space-y-6">
       <div className="flex justify-between items-center bg-white dark:bg-slate-900/50 rounded-xl p-2 border border-slate-100 dark:border-primary/10 shadow-sm">
         <div className="h-8 w-20 bg-slate-100 dark:bg-slate-800 rounded animate-skeleton" />
@@ -373,7 +373,6 @@ export default function YoutubeDetailPage() {
   return (
     <div className="font-display min-h-screen pb-24 bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 overflow-x-hidden">
       <Header
-        title="유튜브 기록"
         onBack={() => router.push('/saved?filter=youtube')}
         showBack
         rightAction={
@@ -429,7 +428,20 @@ export default function YoutubeDetailPage() {
             )}
           </div>
         }
-      />
+      >
+        <div className="flex items-center justify-center gap-1.5 min-w-0">
+          <h1 className="text-xl font-bold leading-tight tracking-tight text-center truncate text-slate-900 dark:text-slate-100">
+            유튜브 (저장)
+          </h1>
+          <button
+            onClick={() => setIsGeminiModalOpen(true)}
+            className="p-1 rounded-full text-primary hover:bg-primary/10 transition-colors shrink-0"
+            title="Gemini 설정"
+          >
+            <span className="material-symbols-outlined text-xl">settings_suggest</span>
+          </button>
+        </div>
+      </Header>
 
       <main className="p-4 space-y-6">
         {/* Navigation Bar */}

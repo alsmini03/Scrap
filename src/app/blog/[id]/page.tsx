@@ -12,7 +12,7 @@ import GeminiSettingsModal from '@/components/GeminiSettingsModal';
 
 const SkeletonBlogDetail = () => (
   <div className="font-display min-h-screen pb-24 bg-white dark:bg-background-dark text-slate-900 dark:text-slate-100">
-    <Header title="블로그 글" showBack onBack={() => {}} />
+    <Header title="블로그 (저장)" showBack onBack={() => {}} />
     <main className="p-4 space-y-6 max-w-2xl mx-auto">
       <div className="flex justify-between items-center bg-white dark:bg-slate-900/50 rounded-xl p-2 border border-slate-100 dark:border-primary/10 shadow-sm">
         <div className="h-8 w-20 bg-slate-100 dark:bg-slate-800 rounded animate-skeleton" />
@@ -153,13 +153,25 @@ export default function BlogDetailPage() {
   return (
     <div className="font-display min-h-screen pb-24 bg-white dark:bg-background-dark text-slate-900 dark:text-slate-100 overflow-x-hidden">
       <Header
-        title="블로그 글"
         onBack={() => router.push('/saved?filter=blog')}
         showBack
         rightAction={
             <button onClick={handleDelete} className="text-red-500 p-2" title="삭제"><span className="material-symbols-outlined">delete</span></button>
         }
-      />
+      >
+        <div className="flex items-center justify-center gap-1.5 min-w-0">
+          <h1 className="text-xl font-bold leading-tight tracking-tight text-center truncate text-slate-900 dark:text-slate-100">
+            블로그 (저장)
+          </h1>
+          <button
+            onClick={() => setIsGeminiModalOpen(true)}
+            className="p-1 rounded-full text-primary hover:bg-primary/10 transition-colors shrink-0"
+            title="Gemini 설정"
+          >
+            <span className="material-symbols-outlined text-xl">settings_suggest</span>
+          </button>
+        </div>
+      </Header>
 
       <main className="p-4 space-y-6 max-w-2xl mx-auto">
         {/* Navigation Bar */}
