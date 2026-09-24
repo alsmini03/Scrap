@@ -285,10 +285,10 @@ export default function BlogDetailPage() {
                 <button
                   onClick={handleRegenerateAi}
                   disabled={isAiRunning}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-primary/10 active:scale-95 transition-all disabled:opacity-50"
+                  className="p-1 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-primary/10 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center"
+                  title="AI 요약 다시 가져오기"
                 >
-                  <span className={cn("material-symbols-outlined text-[13px]", isAiRunning && "animate-spin")}>refresh</span>
-                  다시 가져오기
+                  <span className={cn("material-symbols-outlined text-[16px]", isAiRunning && "animate-spin")}>refresh</span>
                 </button>
               </div>
             </div>

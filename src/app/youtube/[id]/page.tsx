@@ -630,9 +630,10 @@ export default function YoutubeDetailPage() {
                                 <button
                                     onClick={handleRetrySummary}
                                     disabled={isRefetching}
-                                    className="w-full py-2.5 bg-red-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all disabled:opacity-50"
+                                    className="w-full py-2.5 bg-red-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                                    title="AI 요약 다시 가져오기"
                                 >
-                                    다시 가져오기
+                                    <span className={cn("material-symbols-outlined text-sm", isRefetching && "animate-spin")}>refresh</span>
                                 </button>
                             </div>
                         );
