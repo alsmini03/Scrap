@@ -6,6 +6,7 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
     let categoryNo = "";
     let isTistory = idOrUrl.includes("tistory.com");
     let isBrunch = idOrUrl.includes("brunch.co.kr");
+    let isPostype = idOrUrl.includes("postype.com");
 
     if (idOrUrl.startsWith('http')) {
         try {
@@ -14,6 +15,9 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
                 blogId = parsedUrl.hostname.split('.')[0];
             } else if (isBrunch) {
                 blogId = parsedUrl.pathname.split('/')[1]; // @socandy
+            } else if (isPostype) {
+                const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+                blogId = pathParts[0] || idOrUrl; // e.g., @juiknam
             } else {
                 blogId = parsedUrl.searchParams.get('blogId') || parsedUrl.pathname.split('/')[1] || idOrUrl;
                 categoryNo = parsedUrl.searchParams.get('categoryNo') || "";
@@ -26,7 +30,7 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
     let allPosts: any[] = [];
 
     // Naver Blog pagination via PostTitleListAsync
-    if (!isTistory && !isBrunch) {
+    if (!isTistory && !isBrunch && !isPostype) {
         try {
             const asyncUrl = `https://blog.naver.com/PostTitleListAsync.naver?blogId=${blogId}&currentPage=${page}&countPerPage=20${categoryNo ? `&categoryNo=${categoryNo}` : ''}`;
             const asyncRes = await fetch(asyncUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
@@ -61,8 +65,8 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
 
     // RSS approach (for Page 1 or fallback)
     if (page === 1) {
-        if (isTistory && idOrUrl.includes('/category/')) {
-            // Tistory Category: skip to scraping
+        if ((isTistory && idOrUrl.includes('/category/')) || isPostype) {
+            // Skip to scraping for Postype or Tistory Category
         } else {
             let rssUrl = isTistory ? `https://${blogId}.tistory.com/rss` : `https://rss.blog.naver.com/${blogId}.xml`;
             if (!isTistory && categoryNo) {
@@ -121,7 +125,15 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
     }
 
     // Fallback to scraping
-    const fetchUrl = idOrUrl.startsWith('http') ? idOrUrl : `https://m.blog.naver.com/PostList.naver?blogId=${idOrUrl}`;
+    let fetchUrl = idOrUrl;
+    if (!idOrUrl.startsWith('http')) {
+        if (isPostype || idOrUrl.startsWith('@')) {
+            const cleanId = idOrUrl.startsWith('@') ? idOrUrl : `@${idOrUrl}`;
+            fetchUrl = `https://www.postype.com/${cleanId}`;
+        } else {
+            fetchUrl = `https://m.blog.naver.com/PostList.naver?blogId=${idOrUrl}`;
+        }
+    }
     try {
         const response = await fetch(fetchUrl, {
             headers: {
@@ -132,6 +144,48 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
         if (response.ok) {
             const html = await response.text();
             const $ = cheerio.load(html);
+
+            if (isPostype) {
+                const channelTitleMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
+                let channelTitle = channelTitleMatch ? channelTitleMatch[1].replace(/:\s*포스타입.*$/, "").replace(/\s*:\s*.*$/, "").trim() : blogId;
+
+                const relativePaths = Array.from(new Set(html.match(/\/@[a-zA-Z0-9_\-]+\/post\/\d+/g) || []));
+                const itemsToProcess = limit > 0 ? relativePaths.slice(0, limit) : relativePaths;
+
+                const postPromises = itemsToProcess.map(async (pPath) => {
+                    const fullUrl = `https://www.postype.com${pPath}`;
+                    try {
+                        const pRes = await fetch(fullUrl, {
+                            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+                        });
+                        if (!pRes.ok) return null;
+                        const pHtml = await pRes.text();
+
+                        let title = pHtml.match(/<meta property="og:title" content="([^"]+)"/)?.[1] || "";
+                        title = title.replace(/:\s*포스타입.*$/, "").replace(/\s*:\s*.*$/, "").trim();
+
+                        const author = pHtml.match(/<meta property="og:site_name" content="([^"]+)"/)?.[1] || channelTitle;
+                        const date = pHtml.match(/"datePublished":"([^"]+)"/)?.[1] || pHtml.match(/<meta property="article:published_time" content="([^"]+)"/)?.[1] || "";
+                        let thumbnail = pHtml.match(/<meta property="og:image" content="([^"]+)"/)?.[1] || null;
+                        if (thumbnail && thumbnail.includes("empty_thumbnail_seo.png")) thumbnail = null;
+
+                        return {
+                            title: he.decode(title || "Untitled Post"),
+                            author: channelTitle || author,
+                            url: fullUrl,
+                            thumbnail,
+                            published_at: date,
+                            blogId
+                        };
+                    } catch (e) {
+                        return null;
+                    }
+                });
+
+                const fetchedPosts = await Promise.all(postPromises);
+                allPosts = fetchedPosts.filter(Boolean);
+                if (allPosts.length > 0) return allPosts;
+            }
 
             if (isBrunch) {
                 const rssUrl = $("link[type='application/rss+xml']").attr("href");

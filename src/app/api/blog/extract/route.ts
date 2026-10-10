@@ -11,13 +11,14 @@ export async function POST(req: NextRequest) {
     let isNaver = url.includes("blog.naver.com");
     const isTistory = url.includes("tistory.com");
     const isBrunch = url.includes("brunch.co.kr");
+    const isPostype = url.includes("postype.com");
 
     if (isNaver && !url.includes("m.blog.naver.com")) {
         url = url.replace("blog.naver.com", "m.blog.naver.com");
     }
 
-    if (!url || (!isNaver && !isTistory && !isBrunch)) {
-      return NextResponse.json({ error: "Invalid Blog URL (Supports Naver, Tistory, and Brunch)" }, { status: 400 });
+    if (!url || (!isNaver && !isTistory && !isBrunch && !isPostype)) {
+      return NextResponse.json({ error: "Invalid Blog URL (Supports Naver, Tistory, Brunch, and Postype)" }, { status: 400 });
     }
 
     // Handle List URL: if user provides a list URL, get the latest post first
@@ -36,11 +37,16 @@ export async function POST(req: NextRequest) {
         if (posts && posts.length > 0) {
             url = posts[0].url;
         }
+    } else if (isPostype && !url.includes('/post/')) {
+        const posts = await getBlogPosts(url);
+        if (posts && posts.length > 0) {
+            url = posts[0].url;
+        }
     }
 
     const response = await fetch(url, {
       headers: {
-        "User-Agent": isBrunch ? "facebookexternalhit/1.1" : "Mozilla/5.0 (iPhone; CPU iPhone OS 14_8 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1",
+        "User-Agent": isBrunch ? "facebookexternalhit/1.1" : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
     });
 
@@ -244,6 +250,50 @@ export async function POST(req: NextRequest) {
         }
         if (!content.trim()) content = $(".wrap_body").html() || "";
         date = $(".publish_date").text().trim() || $("meta[property='article:published_time']").attr("content") || "";
+    } else if (isPostype) {
+        let rawTitle = $("meta[property='og:title']").attr("content") || $("title").text() || "";
+        title = he.decode(rawTitle.replace(/:\s*포스타입.*$/, "").replace(/\s*:\s*.*$/, "").trim());
+
+        author = he.decode($("meta[property='og:site_name']").attr("content") || $("meta[name='author']").attr("content") || "").trim();
+
+        // Extract published date from LD+JSON or meta tag
+        const jsonLdText = $("script[type='application/ld+json']").html();
+        if (jsonLdText) {
+            try {
+                const ldData = JSON.parse(jsonLdText);
+                if (ldData.datePublished) date = ldData.datePublished;
+            } catch (e) {}
+        }
+        if (!date) {
+            date = $("meta[property='article:published_time']").attr("content") || "";
+        }
+
+        // Thumbnail extraction (ignore default placeholder)
+        const ogImage = $("meta[property='og:image']").attr("content");
+        if (ogImage && !ogImage.includes("empty_thumbnail_seo.png")) {
+            thumbnail = ogImage;
+        } else {
+            thumbnail = undefined;
+        }
+
+        // Content extraction: Postype uses #post-content
+        let startIdx = html.indexOf('id="post-content"');
+        if (startIdx !== -1) {
+            let endIdx = html.indexOf('<section class="pay pay-support"', startIdx);
+            if (endIdx === -1) {
+                endIdx = html.indexOf('</article>', startIdx);
+            }
+            if (endIdx !== -1) {
+                const rawContent = html.slice(startIdx + 'id="post-content">'.length, endIdx);
+                const $postContent = cheerio.load(rawContent, null, false);
+                $postContent('script, style, iframe').remove();
+                content = $postContent.html() || "";
+            } else {
+                content = $("#post-content").html() || "";
+            }
+        } else {
+            content = $("#post-content, .post-content").html() || "";
+        }
     }
 
     // Requirement: Format date for title (YYYY-MM-DD)
