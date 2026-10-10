@@ -129,10 +129,12 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
     if (!idOrUrl.startsWith('http')) {
         if (isPostype || idOrUrl.startsWith('@')) {
             const cleanId = idOrUrl.startsWith('@') ? idOrUrl : `@${idOrUrl}`;
-            fetchUrl = `https://www.postype.com/${cleanId}`;
+            fetchUrl = `https://www.postype.com/${cleanId}?page=${page}`;
         } else {
             fetchUrl = `https://m.blog.naver.com/PostList.naver?blogId=${idOrUrl}`;
         }
+    } else if (isPostype && !fetchUrl.includes('page=')) {
+        fetchUrl += (fetchUrl.includes('?') ? '&' : '?') + `page=${page}`;
     }
     try {
         const response = await fetch(fetchUrl, {
@@ -149,7 +151,39 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
                 const channelTitleMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
                 let channelTitle = channelTitleMatch ? channelTitleMatch[1].replace(/:\s*포스타입.*$/, "").replace(/\s*:\s*.*$/, "").trim() : blogId;
 
-                const relativePaths = Array.from(new Set(html.match(/\/@[a-zA-Z0-9_\-]+\/post\/\d+/g) || []));
+                // Extract post relative paths from standard HTML links or Next.js state
+                let relativePaths = Array.from(new Set(html.match(/\/@[a-zA-Z0-9_\-]+\/post\/\d+/g) || []));
+
+                // Fallback: match postId pattern from __next_f script state if standard links are missing
+                if (relativePaths.length === 0) {
+                    const cleanHandle = blogId.startsWith('@') ? blogId : `@${blogId}`;
+                    const nextFMatches = Array.from(new Set(html.match(/\\"postId\\":\s*(\d+)/g) || html.match(/"postId":\s*(\d+)/g) || []));
+                    relativePaths = nextFMatches.map(m => {
+                        const num = m.match(/\d+/)?.[0];
+                        return num ? `/${cleanHandle.replace('@', '')}/post/${num}` : null;
+                    }).filter(Boolean) as string[];
+                    relativePaths = Array.from(new Set(relativePaths));
+                }
+
+                // If page > 1 returns the same initial posts or no new posts, return empty list to end infinite scroll cleanly
+                if (page > 1) {
+                    // Fetch page 1 posts to compare
+                    const cleanHandle = blogId.startsWith('@') ? blogId : `@${blogId}`;
+                    const page1Url = `https://www.postype.com/${cleanHandle}`;
+                    try {
+                        const p1Res = await fetch(page1Url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
+                        if (p1Res.ok) {
+                            const p1Html = await p1Res.text();
+                            const p1Paths = new Set(p1Html.match(/\/@[a-zA-Z0-9_\-]+\/post\/\d+/g) || []);
+                            relativePaths = relativePaths.filter(p => !p1Paths.has(p));
+                        }
+                    } catch (e) {}
+
+                    if (relativePaths.length === 0) {
+                        return [];
+                    }
+                }
+
                 const itemsToProcess = limit > 0 ? relativePaths.slice(0, limit) : relativePaths;
 
                 const postPromises = itemsToProcess.map(async (pPath) => {
