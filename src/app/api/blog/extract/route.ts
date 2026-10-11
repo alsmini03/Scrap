@@ -287,6 +287,28 @@ export async function POST(req: NextRequest) {
                 const rawContent = html.slice(startIdx + 'id="post-content">'.length, endIdx);
                 const $postContent = cheerio.load(rawContent, null, false);
                 $postContent('script, style, iframe, .profile-img, .avatar, .pay-support').remove();
+
+                // Clean and unwrap images for Postype to avoid layout-breaking wrappers
+                $postContent('img').each((_, imgEl) => {
+                    const $img = $postContent(imgEl);
+                    let src = $img.attr('src') || $img.attr('data-src') || $img.attr('data-lazy-src');
+                    if (src) {
+                        if (src.startsWith('//')) src = 'https:' + src;
+                        const newImgHtml = `<img src="${src}" style="max-width:100%; height:auto; border-radius:12px; margin: 12px 0; display:block;" referrerpolicy="no-referrer" />`;
+                        const $parentFigure = $img.closest('figure');
+                        const $parentA = $img.closest('a');
+                        if ($parentFigure.length > 0) {
+                            $parentFigure.replaceWith(newImgHtml);
+                        } else if ($parentA.length > 0) {
+                            $parentA.replaceWith(newImgHtml);
+                        } else {
+                            $img.replaceWith(newImgHtml);
+                        }
+                    } else {
+                        $img.remove();
+                    }
+                });
+
                 content = $postContent.html() || "";
             } else {
                 const $postContent = cheerio.load($("#post-content").html() || "", null, false);
