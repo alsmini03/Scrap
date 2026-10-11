@@ -271,7 +271,11 @@ export async function POST(req: NextRequest) {
         // Thumbnail extraction (ignore default placeholder)
         const ogImage = $("meta[property='og:image']").attr("content");
         if (ogImage && !ogImage.includes("empty_thumbnail_seo.png")) {
-            thumbnail = ogImage;
+            if (ogImage.includes("cloudfront.net") || ogImage.includes("postype.com")) {
+                thumbnail = `/api/proxy-image?url=${encodeURIComponent(ogImage)}`;
+            } else {
+                thumbnail = ogImage;
+            }
         } else {
             thumbnail = undefined;
         }
@@ -294,7 +298,11 @@ export async function POST(req: NextRequest) {
                     let src = $img.attr('src') || $img.attr('data-src') || $img.attr('data-lazy-src');
                     if (src) {
                         if (src.startsWith('//')) src = 'https:' + src;
-                        const newImgHtml = `<img src="${src}" style="max-width:100%; height:auto; border-radius:12px; margin: 12px 0; display:block;" referrerpolicy="no-referrer" />`;
+                        const proxiedSrc = (src.includes('cloudfront.net') || src.includes('postype.com')) && !src.startsWith('/api/proxy-image')
+                            ? `/api/proxy-image?url=${encodeURIComponent(src)}`
+                            : src;
+
+                        const newImgHtml = `<img src="${proxiedSrc}" style="max-width:100%; height:auto; border-radius:12px; margin: 12px 0; display:block;" referrerpolicy="no-referrer" />`;
                         const $parentFigure = $img.closest('figure');
                         const $parentA = $img.closest('a');
                         if ($parentFigure.length > 0) {
@@ -388,6 +396,9 @@ export async function POST(req: NextRequest) {
             let src = $img.attr('src') || $img.attr('data-src') || $img.attr('data-lazy-src');
             if (src) {
                 if (src.startsWith('//')) src = 'https:' + src;
+                if ((src.includes('cloudfront.net') || src.includes('postype.com')) && !src.startsWith('/api/proxy-image')) {
+                    src = `/api/proxy-image?url=${encodeURIComponent(src)}`;
+                }
                 $img.attr('src', src);
                 $img.attr('referrerpolicy', 'no-referrer');
                 $img.attr('style', 'max-width:100%; height:auto; border-radius:12px; margin: 12px 0; display:block;');
