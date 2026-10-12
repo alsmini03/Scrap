@@ -898,14 +898,20 @@ export async function sendBatchEmailAction(items: { type: 'youtube' | 'blog' | '
                     const $img = $blogContent(imgEl);
                     let src = $img.attr('src') || $img.attr('data-src');
                     if (src) {
-                      if (src.startsWith('/api/proxy-image')) {
-                        src = `${baseUrl}${src}`;
-                      } else if (src.includes('cloudfront.net') || src.includes('postype.com')) {
-                        src = `${baseUrl}/api/proxy-image?url=${encodeURIComponent(src)}`;
-                      } else if (src.startsWith('//')) {
+                      // Extract original URL if proxied
+                      if (src.includes('/api/proxy-image?url=')) {
+                        try {
+                          const match = src.match(/url=([^&]+)/);
+                          if (match) {
+                            src = decodeURIComponent(match[1]);
+                          }
+                        } catch (e) {}
+                      }
+                      if (src.startsWith('//')) {
                         src = 'https:' + src;
                       }
                       $img.attr('src', src);
+                      $img.attr('referrerpolicy', 'no-referrer');
                       $img.attr('style', 'max-width:100%; height:auto; border-radius:8px; margin:10px 0; display:block;');
                     }
                   });
