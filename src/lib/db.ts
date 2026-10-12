@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
 import { sendGmail } from './gmail';
 import { marked } from 'marked';
+import * as cheerio from 'cheerio';
 import { gfmHeadingId } from "marked-gfm-heading-id";
 import { query } from './pg';
 import { randomUUID } from "node:crypto";
@@ -790,6 +791,7 @@ export async function sendBatchEmailAction(items: { type: 'youtube' | 'blog' | '
     if (!user.id) throw new Error('Unauthorized');
 
     const accessToken = await getValidAccessToken(user.id);
+    const baseUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
     let htmlContent = '';
     let subject = '';
@@ -888,7 +890,29 @@ export async function sendBatchEmailAction(items: { type: 'youtube' | 'blog' | '
               </div>
               ` : ''}
 
-              <div style="font-size: 14px; color: #333; line-height: 1.7; white-space: pre-wrap;">${blog.content}</div>
+              ${(() => {
+                let blogContentHtml = blog.content || '';
+                if (blogContentHtml) {
+                  const $blogContent = cheerio.load(blogContentHtml, null, false);
+                  $blogContent('img').each((_, imgEl) => {
+                    const $img = $blogContent(imgEl);
+                    let src = $img.attr('src') || $img.attr('data-src');
+                    if (src) {
+                      if (src.startsWith('/api/proxy-image')) {
+                        src = `${baseUrl}${src}`;
+                      } else if (src.includes('cloudfront.net') || src.includes('postype.com')) {
+                        src = `${baseUrl}/api/proxy-image?url=${encodeURIComponent(src)}`;
+                      } else if (src.startsWith('//')) {
+                        src = 'https:' + src;
+                      }
+                      $img.attr('src', src);
+                      $img.attr('style', 'max-width:100%; height:auto; border-radius:8px; margin:10px 0; display:block;');
+                    }
+                  });
+                  blogContentHtml = $blogContent.html() || '';
+                }
+                return `<div style="font-size: 14px; color: #333; line-height: 1.7;">${blogContentHtml}</div>`;
+              })()}
             </div>
           </div>
         `;
