@@ -126,6 +126,10 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
 
     // Fallback to scraping
     let fetchUrl = idOrUrl;
+    if (isTistory && fetchUrl.includes('/m/category/')) {
+        fetchUrl = fetchUrl.replace('/m/category/', '/category/');
+    }
+
     if (!idOrUrl.startsWith('http')) {
         if (isPostype || idOrUrl.startsWith('@')) {
             const cleanId = idOrUrl.startsWith('@') ? idOrUrl : `@${idOrUrl}`;
@@ -262,55 +266,11 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
                 const blogTitle = $("meta[property='og:title']").attr("content") || $("title").text() || blogId;
                 const seenUrls = new Set<string>();
 
-                // Priority 1: application/ld+json (BreadcrumbList)
-                const scripts = $("script[type='application/ld+json']").toArray();
-                for (const script of scripts) {
-                    const content = $(script).html() || "";
-                    if (content.includes("BreadcrumbList")) {
-                        try {
-                            const data = JSON.parse(content);
-                            const items = data.itemListElement || [];
-                            const extracted = await Promise.all(items.map(async (item: any) => {
-                                if (item.item && item.item["@id"] && (item.item["@id"].includes("/entry/") || item.item["@id"].includes("/m/entry/"))) {
-                                    let fullUrl = item.item["@id"];
-                                    if (!fullUrl.includes("/m/")) {
-                                        try {
-                                            const urlObj = new URL(fullUrl);
-                                            fullUrl = `${urlObj.origin}/m${urlObj.pathname}`;
-                                        } catch(e) {}
-                                    }
+                // Remove widgets, sidebars, headers, notices to avoid duplicate featured post links
+                $("#sidebar, .sidebar, #header, header, #footer, footer, .another_category, .widget, .popular-posts, .notice-list").remove();
 
-                                    let actualDate = new Date().toISOString();
-                                    try {
-                                        const res = await fetch(fullUrl, { headers: { "User-Agent": "facebookexternalhit/1.1" } });
-                                        if (res.ok) {
-                                            const postHtml = await res.text();
-                                            const $post = cheerio.load(postHtml);
-                                            actualDate = $post("meta[property='article:published_time']").attr("content") ||
-                                                         $post(".txt_date, .date").first().text().trim() || actualDate;
-                                        }
-                                    } catch(e) {}
-
-                                    return {
-                                        title: he.decode(item.item.name),
-                                        author: blogTitle,
-                                        url: fullUrl,
-                                        thumbnail: null,
-                                        published_at: actualDate,
-                                        blogId: blogId
-                                    };
-                                }
-                                return null;
-                            }));
-
-                            const filtered = extracted.filter((i: any) => i !== null);
-                            if (filtered.length > 0) return filtered;
-                        } catch(e) {}
-                    }
-                }
-
-                // Priority 2: CSS Selectors & List Items
-                let listItems = $("ul.list_blog2 li, ul.list_post li, .list_content li, .article_content, .post-item, .entry-item, article").toArray();
+                // CSS Selectors & List Items
+                let listItems = $("ul.list_blog2 li, ul.list_post li, .list_content li, .article_content, .post-item, .entry-item, article, .item_category, .article_skin").toArray();
                 if (listItems.length === 0) listItems = $("a").toArray();
                 if (limit > 0) listItems = listItems.slice(0, limit);
 
@@ -318,7 +278,7 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
                     const $el = $(el);
                     const $link = $el.is('a') ? $el : $el.find("a").first();
                     const href = $link.attr('href');
-                    if (!href) return;
+                    if (!href || href.includes('/notice/') || href.includes('/manage/')) return;
 
                     const lastPart = href.split('?')[0].split('#')[0].split('/').pop() || '';
                     const isNumericEntry = !isNaN(Number(lastPart)) && Number(lastPart) > 0;
@@ -338,7 +298,7 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
 
                         if (!seenUrls.has(fullUrl)) {
                             seenUrls.add(fullUrl);
-                            const title = $el.find(".tit_blog2, .tit_post, .title, strong, h3, h2, .title-post").first().text().trim() || $link.text().trim();
+                            const title = $el.find(".tit_blog2, .tit_post, .title, strong, h3, h2, .title-post, .tit_katok").first().text().trim() || $link.text().trim();
                             const date = $el.find(".txt_date, .date, .time").first().text().trim() || new Date().toISOString();
 
                             let thumbnail = $el.find(".img_thumb, img").first().attr("src");
@@ -348,7 +308,7 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
                                 if (urlMatch) thumbnail = urlMatch[1];
                             }
 
-                            if (title && title.length > 1) {
+                            if (title && title.length > 1 && !title.includes('목록부자회사원')) {
                                 allPosts.push({
                                     title: he.decode(title),
                                     author: blogTitle,
@@ -364,18 +324,21 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
 
                 if (allPosts.length > 0) return allPosts;
             } else if (isBrunch) {
-                // Fallback for Brunch if RSS not found in meta
+                if (page > 1) {
+                    return [];
+                }
+
+                // Extract userId or profileId from Brunch page
                 let userId = "";
                 $("script").each((_, el) => {
                     const content = $(el).html() || "";
-                    const match = content.match(/"userId":\[[01],"([^"]+)"\]/);
+                    const match = content.match(/"userId":"([^"]+)"/) || content.match(/"userId":\[[01],"([^"]+)"\]/);
                     if (match) userId = match[1];
                 });
 
                 if (userId) {
-                    // Try to construct RSS from userId
                     const rssUrl = `https://brunch.co.kr/rss/@@${userId}`;
-                    const rssRes = await fetch(rssUrl, { next: { revalidate: 3600 } });
+                    const rssRes = await fetch(rssUrl, { headers: { "User-Agent": "facebookexternalhit/1.1" } });
                     if (rssRes.ok) {
                         const xml = await rssRes.text();
                         const $rss = cheerio.load(xml, { xmlMode: true });
