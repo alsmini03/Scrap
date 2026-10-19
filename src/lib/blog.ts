@@ -147,7 +147,7 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
     try {
         const response = await fetch(fetchUrl, {
             headers: {
-                "User-Agent": "facebookexternalhit/1.1", // Works better for most
+                "User-Agent": isBrunch ? "facebookexternalhit/1.1" : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             },
         });
 
@@ -267,18 +267,15 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
                 const seenUrls = new Set<string>();
 
                 // Remove widgets, sidebars, headers, notices to avoid duplicate featured post links
-                $("#sidebar, .sidebar, #header, header, #footer, footer, .another_category, .widget, .popular-posts, .notice-list").remove();
+                $(".col_aside, .box_aside, .another_category, .popular-posts, #sidebar, .sidebar, #header, header, #footer, footer, .notice-list").remove();
 
-                // CSS Selectors & List Items
-                let listItems = $("ul.list_blog2 li, ul.list_post li, .list_content li, .article_content, .post-item, .entry-item, article, .item_category, .article_skin").toArray();
-                if (listItems.length === 0) listItems = $("a").toArray();
-                if (limit > 0) listItems = listItems.slice(0, limit);
+                const links = $("a").toArray();
+                const itemsToProcess = limit > 0 ? links.slice(0, limit) : links;
 
-                listItems.forEach((el) => {
+                itemsToProcess.forEach((el) => {
                     const $el = $(el);
-                    const $link = $el.is('a') ? $el : $el.find("a").first();
-                    const href = $link.attr('href');
-                    if (!href || href.includes('/notice/') || href.includes('/manage/')) return;
+                    const href = $el.attr('href');
+                    if (!href || href.includes('/notice/') || href.includes('/manage/') || href.includes('/category/')) return;
 
                     const lastPart = href.split('?')[0].split('#')[0].split('/').pop() || '';
                     const isNumericEntry = !isNaN(Number(lastPart)) && Number(lastPart) > 0;
@@ -298,12 +295,17 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
 
                         if (!seenUrls.has(fullUrl)) {
                             seenUrls.add(fullUrl);
-                            const title = $el.find(".tit_blog2, .tit_post, .title, strong, h3, h2, .title-post, .tit_katok").first().text().trim() || $link.text().trim();
-                            const date = $el.find(".txt_date, .date, .time").first().text().trim() || new Date().toISOString();
+                            const title = $el.find(".tit_blog2, .tit_post, .title, strong, h3, h2, .title-post, .tit_katok").first().text().trim() ||
+                                          $el.text().trim() ||
+                                          $el.parent().find(".tit_blog2, .tit_post, .title, strong, h3, h2, .title-post, .tit_katok").first().text().trim();
 
-                            let thumbnail = $el.find(".img_thumb, img").first().attr("src");
+                            const date = $el.find(".txt_date, .date, .time").first().text().trim() ||
+                                         $el.parent().find(".txt_date, .date, .time").first().text().trim() ||
+                                         new Date().toISOString();
+
+                            let thumbnail = $el.find(".img_thumb, img").first().attr("src") || $el.parent().find(".img_thumb, img").first().attr("src");
                             if (!thumbnail) {
-                                const style = $el.find(".img_thumb").attr("style") || "";
+                                const style = $el.find(".img_thumb").attr("style") || $el.parent().find(".img_thumb").attr("style") || "";
                                 const urlMatch = style.match(/url\(['"]?(.*?)['"]?\)/);
                                 if (urlMatch) thumbnail = urlMatch[1];
                             }
