@@ -904,8 +904,20 @@ const RecommendItem = memo(({ post, addingUrl, isSaved, isEditMode, isSelected, 
         className="flex-1 p-4 min-w-0"
       >
           <div className="flex flex-col justify-center">
-              <h3 className="font-bold text-slate-900 dark:text-slate-100 line-clamp-2 leading-tight mb-1.5">{post.title}</h3>
-              <div className="flex justify-between items-center">
+              {post.magazineTitle && (
+                <div className="mb-1">
+                  <span className="inline-block px-2 py-0.5 rounded-md bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-bold">
+                    {post.magazineTitle}
+                  </span>
+                </div>
+              )}
+              <h3 className="font-bold text-slate-900 dark:text-slate-100 line-clamp-2 leading-tight mb-1">{post.title}</h3>
+              {post.subTitle && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mb-1.5 font-normal">
+                  {post.subTitle}
+                </p>
+              )}
+              <div className="flex justify-between items-center mt-0.5">
                   {post.author && <p className="text-[10px] text-primary font-bold mr-2 truncate">{post.author}</p>}
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap">
                     {formatDateToYMD(post.published_at)}

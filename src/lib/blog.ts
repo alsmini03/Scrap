@@ -162,6 +162,8 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
 
                     allPosts.push({
                         title: he.decode(title),
+                        subTitle: item.subTitle ? he.decode(item.subTitle) : null,
+                        magazineTitle: item.magazineTitle ? he.decode(item.magazineTitle) : null,
                         author,
                         url,
                         thumbnail,
