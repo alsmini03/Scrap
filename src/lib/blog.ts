@@ -128,6 +128,22 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
     if (isBrunch) {
         try {
             const handle = blogId.startsWith('@') ? blogId : `@${blogId}`;
+            let authorDisplayName = "";
+
+            // Fetch profile display name
+            try {
+                const profileRes = await fetch(`https://brunch.co.kr/${handle}`, {
+                    headers: { "User-Agent": "Googlebot/2.1 (+http://www.google.com/bot.html)" }
+                });
+                if (profileRes.ok) {
+                    const profileHtml = await profileRes.text();
+                    const titleMatch = profileHtml.match(/<meta property="og:title" content="([^"]+)"/);
+                    if (titleMatch) {
+                        authorDisplayName = titleMatch[1].replace(/의 브런치.*$/, "").replace(/ - 브런치.*$/, "").trim();
+                    }
+                }
+            } catch (e) {}
+
             let lastTime = 0;
             let pageList: any[] = [];
 
@@ -153,17 +169,29 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
             if (pageList.length > 0) {
                 pageList.forEach((item: any) => {
                     const title = item.title || "";
-                    const author = item.userName || item.user?.userName || blogId;
+                    let author = item.userName || item.user?.userName || authorDisplayName || blogId;
+                    if (author.includes("c3e689f797bd432")) {
+                        author = authorDisplayName || blogId;
+                    }
+
                     const profileId = item.profileId || blogId.replace('@', '');
                     const no = item.no || item.articleNo;
                     const url = `https://brunch.co.kr/@${profileId}/${no}`;
                     const thumbnail = item.coverImageUrl || item.thumbnailUrl || null;
                     const published_at = item.publishTime ? new Date(item.publishTime).toISOString() : new Date().toISOString();
 
+                    let magazineUrl = null;
+                    if (item.magazineAddressUri) {
+                        magazineUrl = `https://brunch.co.kr${item.magazineAddressUri.startsWith('/') ? '' : '/'}${item.magazineAddressUri}`;
+                    } else if (item.magazineAddress) {
+                        magazineUrl = `https://brunch.co.kr/magazine/${item.magazineAddress}`;
+                    }
+
                     allPosts.push({
                         title: he.decode(title),
                         subTitle: item.subTitle ? he.decode(item.subTitle) : null,
                         magazineTitle: item.magazineTitle ? he.decode(item.magazineTitle) : null,
+                        magazineUrl,
                         author,
                         url,
                         thumbnail,

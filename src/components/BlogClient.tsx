@@ -891,24 +891,40 @@ const RecommendItem = memo(({ post, addingUrl, isSaved, isEditMode, isSelected, 
     onPointerDown={(e) => onPointerDown(e, post.url)}
     onContextMenu={(e) => e.preventDefault()}
   >
-      <a
-        href={isEditMode ? '#' : post.url}
-        target={isEditMode ? undefined : "_blank"}
-        rel={isEditMode ? undefined : "noopener"}
+      <div
+        className="flex-1 p-4 min-w-0 cursor-pointer"
         onClick={(e) => {
             if (isEditMode) {
-                e.preventDefault();
                 onToggleSelect(post.url);
+            } else {
+                window.open(post.url, '_blank', 'noopener,noreferrer');
             }
         }}
-        className="flex-1 p-4 min-w-0"
       >
           <div className="flex flex-col justify-center">
               {post.magazineTitle && (
                 <div className="mb-1">
-                  <span className="inline-block px-2 py-0.5 rounded-md bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-bold">
-                    {post.magazineTitle}
-                  </span>
+                  {post.magazineUrl ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        if (isEditMode) {
+                          onToggleSelect(post.url);
+                        } else {
+                          window.open(post.magazineUrl, '_blank', 'noopener,noreferrer');
+                        }
+                      }}
+                      className="inline-block px-2 py-0.5 rounded-md bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 dark:hover:bg-amber-500/30 text-[10px] font-bold transition-colors cursor-pointer"
+                    >
+                      {post.magazineTitle}
+                    </button>
+                  ) : (
+                    <span className="inline-block px-2 py-0.5 rounded-md bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-bold">
+                      {post.magazineTitle}
+                    </span>
+                  )}
                 </div>
               )}
               <h3 className="font-bold text-slate-900 dark:text-slate-100 line-clamp-2 leading-tight mb-1">{post.title}</h3>
@@ -924,7 +940,7 @@ const RecommendItem = memo(({ post, addingUrl, isSaved, isEditMode, isSelected, 
                   </p>
               </div>
           </div>
-      </a>
+      </div>
       <button
           onClick={(e) => {
             if (isEditMode) {
