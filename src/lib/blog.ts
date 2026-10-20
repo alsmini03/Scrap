@@ -124,9 +124,56 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
         }
     }
 
-    // Brunch does not support pagination (RSS provides all available recent posts on page 1)
-    if (isBrunch && page > 1) {
-        return [];
+    // Brunch v2 API for full pagination support
+    if (isBrunch) {
+        try {
+            const handle = blogId.startsWith('@') ? blogId : `@${blogId}`;
+            let lastTime = 0;
+            let pageList: any[] = [];
+
+            for (let p = 1; p <= page; p++) {
+                const apiUrl = `https://api.brunch.co.kr/v2/article/${handle}?lastTime=${lastTime}`;
+                const apiRes = await fetch(apiUrl, {
+                    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+                });
+                if (!apiRes.ok) break;
+                const json = await apiRes.json();
+                const list = json.data?.list || [];
+                if (list.length === 0) {
+                    pageList = [];
+                    break;
+                }
+                if (p === page) {
+                    pageList = list;
+                } else {
+                    lastTime = list[list.length - 1].publishTime;
+                }
+            }
+
+            if (pageList.length > 0) {
+                pageList.forEach((item: any) => {
+                    const title = item.title || "";
+                    const author = item.userName || item.user?.userName || blogId;
+                    const profileId = item.profileId || blogId.replace('@', '');
+                    const no = item.no || item.articleNo;
+                    const url = `https://brunch.co.kr/@${profileId}/${no}`;
+                    const thumbnail = item.coverImageUrl || item.thumbnailUrl || null;
+                    const published_at = item.publishTime ? new Date(item.publishTime).toISOString() : new Date().toISOString();
+
+                    allPosts.push({
+                        title: he.decode(title),
+                        author,
+                        url,
+                        thumbnail,
+                        published_at,
+                        blogId
+                    });
+                });
+                return allPosts;
+            }
+        } catch (e) {
+            console.error(`Brunch v2 API failed for ${blogId}`, e);
+        }
     }
 
     // Fallback to scraping
