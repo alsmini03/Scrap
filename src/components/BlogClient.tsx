@@ -104,19 +104,23 @@ export default function BlogClient({
       const newPosts = data.posts || [];
 
       if (pageNum > 1) {
-        setRecommendPosts(prev => {
-          const existingUrls = new Set(prev.map(p => p.url));
-          const uniqueNew = newPosts.filter((p: any) => !existingUrls.has(p.url));
-          return [...prev, ...uniqueNew];
-        });
+        if (newPosts.length === 0) {
+          setHasMore(false);
+        } else {
+          setRecommendPosts(prev => {
+            const existingUrls = new Set(prev.map(p => p.url));
+            const uniqueNew = newPosts.filter((p: any) => !existingUrls.has(p.url));
+            if (uniqueNew.length === 0) {
+              setHasMore(false);
+              return prev;
+            }
+            setHasMore(true);
+            return [...prev, ...uniqueNew];
+          });
+        }
       } else {
         setRecommendPosts(newPosts);
-      }
-
-      if (newPosts.length === 0) {
-        setHasMore(false);
-      } else {
-        setHasMore(true);
+        setHasMore(newPosts.length > 0);
       }
     } catch (err) {
       console.error(err);

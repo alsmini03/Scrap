@@ -124,6 +124,11 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
         }
     }
 
+    // Brunch does not support pagination (RSS provides all available recent posts on page 1)
+    if (isBrunch && page > 1) {
+        return [];
+    }
+
     // Fallback to scraping
     let fetchUrl = idOrUrl;
     if (isTistory && fetchUrl.includes('/m/category/')) {
@@ -326,10 +331,6 @@ export async function getBlogPosts(idOrUrl: string, limit = 0, page = 1) {
 
                 if (allPosts.length > 0) return allPosts;
             } else if (isBrunch) {
-                if (page > 1) {
-                    return [];
-                }
-
                 // Extract userId or profileId from Brunch page
                 let userId = "";
                 $("script").each((_, el) => {
